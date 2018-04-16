@@ -3,6 +3,7 @@
 #include <avr/power.h>
 #include <avr/sleep.h>
 
+#include "ArduinoLog.h"
 #include "FastLED.h"
 #include "I2Cdev.h"
 #include "MPU6050.h"
@@ -20,7 +21,7 @@
 #define BUTTON_1_ON (!digitalRead(PUSH_B1))
 
 // LEDs
-#define NUM_LEDS           9  // How many leds in your strip? (orig: 72)
+#define NUM_LEDS           72 // How many leds in your strip?
 #define HIGH_BRIGHTNESS    50 // Set LEDS brightness
 #define LOW_BRIGHTNESS     10 // Set LEDS brightness
 
@@ -64,6 +65,7 @@ int16_t gy;
 int16_t gz;
 
 String accel_status = String("unknown");
+
 RunningMedian a_forward_rolling_sample = RunningMedian(5);
 RunningMedian a_sideway_rolling_sample = RunningMedian(5);
 RunningMedian a_vertical_rolling_sample = RunningMedian(5);
@@ -124,10 +126,10 @@ void sinelon() {
 
 // eight colored dots, weaving in and out of sync with each other
 void juggle() {
-  fadeToBlackBy( leds, NUM_LEDS, 20);
+  fadeToBlackBy(leds, NUM_LEDS, 20);
   byte dothue = 0;
   for( int i = 0; i < 8; i++) {
-    leds[beatsin16(i+7, 0, NUM_LEDS)] |= CHSV(dothue, 200, 255);
+    leds[beatsin16(i + 7, 0, NUM_LEDS)] |= CHSV(dothue, 200, 255);
     dothue += 32;
   }
 }
@@ -137,7 +139,7 @@ void bpm() {
   uint8_t BeatsPerMinute = 62;
   CRGBPalette16 palette = PartyColors_p;
   uint8_t beat = beatsin8( BeatsPerMinute, 64, 255);
-  for( int i = 0; i < NUM_LEDS; i++) { //9948
+  for( int i = 0; i < NUM_LEDS; ++i) { // 9948
     leds[i] = ColorFromPalette(palette, hue + (i * 2), beat - hue + (i * 10));
   }
 }
@@ -160,14 +162,14 @@ SimplePatternList g_patterns = {
 void redGlitter() {
   frame_count += 1;
   if (frame_count % 4 == 1) { // Slow down frame rate
-    for ( int i = 0; i < NUM_LEDS; i++) {
+    for ( int i = 0; i < NUM_LEDS; ++i) {
       leds[i] = CHSV(HUE_RED, 0, random8() < 60 ? random8() : random8(64));
     }
   }
 }
 
 void ledsOn(int count, int record) {
-  for (int i = NUM_LEDS; i >= 0; i--) {
+  for (int i = 0; i < NUM_LEDS; ++i) {
     if (i <= NUM_LEDS - count) {
       leds[i] = CRGB::Black;
     } else {
@@ -185,18 +187,15 @@ void ledsOn(int count, int record) {
   // insert a delay to keep the framerate modest
   FastLED.delay(1000 / FRAMES_PER_SECOND);
 
-  // do some periodic updates
-  EVERY_N_MILLISECONDS(20) {
-    // slowly cycle the "base color" through the rainbow
-    hue++;
-  }
+  // slowly cycle the "base color" through the rainbow
+  EVERY_N_MILLISECONDS(20) { hue++; }
 }
 
-void LED(String pattern) {
+void led(String pattern) {
   if (pattern == "going_to_sleep") {
     digitalWrite(MOSFET_GATE, HIGH);
     FastLED.setBrightness(LOW_BRIGHTNESS);
-    for (int i = NUM_LEDS; i >=0; i--) {
+    for (int i = 0; i < NUM_LEDS; ++i) {
       leds[i]=CRGB::Blue;
     }
   }
@@ -213,7 +212,7 @@ void LED(String pattern) {
   if (pattern == "start_play"){
     digitalWrite(MOSFET_GATE, HIGH);
     FastLED.setBrightness(LOW_BRIGHTNESS);
-    for (int i = NUM_LEDS; i >=0; i--) {
+    for (int i = 0; i < NUM_LEDS; ++i) {
       leds[i] = CRGB::Green;
     }
   }
@@ -233,13 +232,13 @@ void LED(String pattern) {
   if (pattern == "game_over") {
     digitalWrite(MOSFET_GATE, HIGH);
     FastLED.setBrightness(LOW_BRIGHTNESS);
-    for (int i = NUM_LEDS; i >=0; i--) {
+    for (int i = 0; i < NUM_LEDS; ++i) {
       leds[i] = CRGB::Red;
     }
   }
 
   if (pattern == "off") {
-    for (int i = NUM_LEDS; i >=0; i--) {
+    for (int i = 0; i < NUM_LEDS; ++i) {
       //leds[i]=CRGB::Black;
       leds[i].nscale8(230);
     }
@@ -252,14 +251,11 @@ void LED(String pattern) {
   // insert a delay to keep the framerate modest
   FastLED.delay(1000 / FRAMES_PER_SECOND);
 
-  // do some periodic updates
-  EVERY_N_MILLISECONDS(20) {
-    // slowly cycle the "base color" through the rainbow
-    hue++;
-  }
+  // slowly cycle the "base color" through the rainbow
+  EVERY_N_MILLISECONDS(20) { hue++; }
 }
 
-void SPIRIT_LEVEL_LED(float angle) {
+void spiritLevelLed(float angle) {
   digitalWrite(MOSFET_GATE, HIGH);
   FastLED.setBrightness(HIGH_BRIGHTNESS);
   int int_angle = int(angle);
@@ -267,7 +263,7 @@ void SPIRIT_LEVEL_LED(float angle) {
   //int pos_led=map(int_angle,45,-45,1,NUM_LEDS);
   int pos_led = map(int_angle, -45, 45, 1, NUM_LEDS);
   int couleur_led = map(pos_led, 0, NUM_LEDS, 0, 255);
-  for (int i = NUM_LEDS; i >=0; i--) {
+  for (int i = 0; i < NUM_LEDS; ++i) {
     if (i == pos_led) {
       leds[i] = CHSV(couleur_led, 255, 255);
     } else {
@@ -281,34 +277,32 @@ void SPIRIT_LEVEL_LED(float angle) {
   // insert a delay to keep the framerate modest
   FastLED.delay(1000 / FRAMES_PER_SECOND);
 
-  // do some periodic updates
-  EVERY_N_MILLISECONDS(20) {
-    // slowly cycle the "base color" through the rainbow
-    hue++;
-  }
+  // slowly cycle the "base color" through the rainbow
+  EVERY_N_MILLISECONDS(20) { hue++; }
 }
 
 // bargraph showing battery level
-void checkBatteryLed(int vcc) {
+void showBatteryLevel(int vcc) {
+  Log.trace("showBatteryLevel(): start\n");
+
+  Log.notice("VCC     : %dmV\n", vcc);
+  Log.notice("LOW_VCC : %dmV\n", LOW_VCC);
+  Log.notice("HIGH_VCC: %dmV\n", HIGH_VCC);
+
   digitalWrite(MOSFET_GATE, HIGH);
   FastLED.setBrightness(LOW_BRIGHTNESS);
+
   if (vcc < LOW_VCC) {
     vcc = LOW_VCC;
-  }
-
-  if (vcc > HIGH_VCC) {
+  } else if (vcc > HIGH_VCC) {
     vcc = HIGH_VCC;
   }
 
   int pos_led = map(vcc, LOW_VCC, HIGH_VCC, 1, NUM_LEDS);
+  Log.verbose("Showing battery level at LED Position: %d\n", pos_led);
 
-  Serial.println(vcc);
-  Serial.println(LOW_VCC);
-  Serial.println(HIGH_VCC);
-  Serial.println(pos_led);
-
-  for (int i = NUM_LEDS; i >=0; i--) {
-    if (i <= pos_led){
+  for (int i = 0; i < NUM_LEDS; ++i) {
+    if (i <= pos_led) {
       if (i <= 5) {
         leds[i] = CRGB::Red;
       } else if (i > 5 && i <= 15) {
@@ -321,17 +315,23 @@ void checkBatteryLed(int vcc) {
     }
   }
 
-  // send the 'leds' array out to the actual LED strip
+  Log.verbose("OCTOPUS %d\n", 1);
+
   FastLED.show();
+
+  Log.verbose("OCTOPUS %d\n", 2);
 
   // insert a delay to keep the framerate modest
   FastLED.delay(1000 / FRAMES_PER_SECOND);
 
-  // do some periodic updates
-  EVERY_N_MILLISECONDS(20) {
-    // slowly cycle the "base color" through the rainbow
-    hue++;
-  }
+  Log.verbose("OCTOPUS %d\n", 3);
+
+  // slowly cycle the "base color" through the rainbow
+  EVERY_N_MILLISECONDS(20) { hue++; }
+
+  Log.verbose("OCTOPUS %d\n", 4);
+
+  Log.trace("showBatteryLevel(): end\n");
 }
 
 void nextPattern() {
@@ -340,11 +340,15 @@ void nextPattern() {
 }
 
 void allOff() {
-  for (int i = NUM_LEDS; i >=0; i--) {
+  Log.trace("allOff(): start\n");
+
+  for (int i = 0; i < NUM_LEDS; ++i) {
     leds[i]=CRGB::Black;
     delay(10);
     FastLED.show();
   }
+
+  Log.trace("allOff(): end\n");
 }
 
 enum {
@@ -361,16 +365,16 @@ enum {
   Wake_Up_Transition
 } condition = Idle;
 
-float checkAccel() {
+float checkAcceleration() {
   // Reads acceleration from MPU6050 to evaluate current condition.
   // Tunables:
   // Output values: accel_status=fallen or straight
   //                orientation=POSITION_1 to POSITION_6
-  //                angle_2_horizon
+  //                angle_to_horizon
   // Get accelerometer readings
   accelgyro.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
 
-  float angle_2_horizon=0;
+  float angle_to_horizon=0;
 
   // Offset accel readings
   //int a_forward_offset = -2;
@@ -445,26 +449,21 @@ float checkAccel() {
     // orientation = FACE_NONE;
   }
 
-  angle_2_horizon = atan2(
+  angle_to_horizon = atan2(
       float(a_vertical_rolling_sample_median),
       float(max(abs(a_sideway_rolling_sample_median),
           abs(a_forward_rolling_sample_median)))) * 180 / PI;
 
-  // for debugging
-  Serial.print("a_forward:");
-  Serial.print(a_forward_rolling_sample_median);
-  Serial.print(" a_sideway:");
-  Serial.print(a_sideway_rolling_sample_median);
-  Serial.print(" a_vertical:");
-  Serial.print(a_vertical_rolling_sample_median);
-  Serial.print(" - ");
-  Serial.print(position_stecchino[orientation]);
-  Serial.print(" - ");
-  Serial.print(accel_status);
-  Serial.print(" - ");
-  Serial.println(angle_2_horizon);
+  Log.notice(
+      "a_forward: %d a_sideway: %d a_vertical: %d - %s - %s - %F\n",
+      a_forward_rolling_sample_median,
+      a_sideway_rolling_sample_median,
+      a_vertical_rolling_sample_median,
+      position_stecchino[orientation],
+      accel_status.c_str(),
+      angle_to_horizon);
 
-  return angle_2_horizon;
+  return angle_to_horizon;
 }
 
 void pinInterrupt(void) {
@@ -500,7 +499,7 @@ void sleepNow(void) {
   // retore MPU connection
   Wire.begin();
   accelgyro.initialize();
-  Serial.println("Restarting MPU... ");
+  Log.notice("Restarting MPU\n");
 
   condition = Check_Battery;
   start_time=millis();
@@ -539,33 +538,39 @@ unsigned long record_time = 0;
 unsigned long previous_record_time = 0;
 int i = 0;
 int vcc = 0;
-float angle_2_horizon = 0;
+float angle_to_horizon = 0;
 bool ready_for_change = false;
 
 void setup() {
   Serial.begin(9600);
   while (!Serial);
 
+  Log.begin(LOG_LEVEL_VERBOSE, &Serial, true);
+  Log.trace("setup(): start\n");
+
+  // Configure push-button 1 with built-in pullup resitor.
   pinMode(PUSH_B1, INPUT);
-  // Configure built-in pullup resitor for push button 1
   digitalWrite(PUSH_B1, HIGH);
 
-  pinMode(MOSFET_GATE,OUTPUT);
-  digitalWrite(MOSFET_GATE,HIGH);
+  pinMode(MOSFET_GATE, OUTPUT);
+  digitalWrite(MOSFET_GATE, HIGH);
 
-  pinMode(MPU_POWER_PIN,OUTPUT);
-  digitalWrite(MPU_POWER_PIN,HIGH);
+  pinMode(MPU_POWER_PIN, OUTPUT);
+  digitalWrite(MPU_POWER_PIN, HIGH);
 
   delay(500);
 
-  // LEDs strip
+  // Setup LED strip.
+  Log.trace("Starting LEDs\n");
   FastLED.addLeds<WS2812B, DATA_PIN, GRB>(leds, NUM_LEDS);
   FastLED.setBrightness(LOW_BRIGHTNESS);
+  Log.trace("Started LEDs\n");
 
   // MPU
+  Log.trace("Starting MPU\n");
   Wire.begin();
   accelgyro.initialize();
-  Serial.println("Starting MPU... ");
+  Log.trace("Started MPU\n");
 
   //a_forward_offset=0;
   //a_sideway_offset=0;
@@ -573,29 +578,28 @@ void setup() {
 
   //delay(2000);
 
-  vcc = int(readVcc());
-  Serial.print("VCC=");
-  Serial.print(vcc);
-  Serial.println("mV");
-  checkBatteryLed(vcc);
+  vcc = static_cast<int>(readVcc());
+  showBatteryLevel(vcc);
+
   delay(2000);
+
   allOff();
 
   start_time = millis();
+
+  Log.trace("setup(): end\n");
 }
 
 void loop() {
-  angle_2_horizon = checkAccel();
+  angle_to_horizon = checkAcceleration();
 
-  Serial.println(condition);
+//  Log.notice(condition);
 
   switch (condition) {
     case Check_Battery:
       vcc = int(readVcc());
-      Serial.print("VCC=");
-      Serial.print(vcc);
-      Serial.println("mV");
-      checkBatteryLed(vcc);
+      Log.notice("VCC=%dmV", vcc);
+      showBatteryLevel(vcc);
       delay(2000);
       allOff();
       condition = Idle;
@@ -630,7 +634,7 @@ void loop() {
         condition = Sleep_Transition;
         start_time = millis();
       } else {
-        LED("idle");
+        led("idle");
       }
       break;
 
@@ -641,7 +645,7 @@ void loop() {
         start_time=millis();
         previous_record_time = record_time;
       } else {
-        LED("start_play");
+        led("start_play");
       }
       */
 
@@ -659,14 +663,14 @@ void loop() {
       if (elapsed_time > previous_record_time &&
           elapsed_time <= previous_record_time + 1 &&
           previous_record_time != 0) {
-        LED("wahoo");
+        led("wahoo");
       }
       if (elapsed_time > MAX_PLAY_SECONDS) {
         condition = Sleep_Transition;
         start_time = millis();
       }
       if (NUM_LEDS_PER_SECONDS * int(elapsed_time) >= NUM_LEDS) {
-        LED("wahoo");
+        led("wahoo");
       } else {
         ledsOn(NUM_LEDS_PER_SECONDS * int(elapsed_time), NUM_LEDS_PER_SECONDS * int(record_time));
       }
@@ -684,7 +688,7 @@ void loop() {
         condition = Idle;
         start_time = millis();
       } else {
-        LED("game_over");
+        led("game_over");
       }
       break;
 
@@ -697,10 +701,9 @@ void loop() {
         condition = Fake_Sleep;
         start_time=millis();
       }
-      SPIRIT_LEVEL_LED(angle_2_horizon);
+      spiritLevelLed(angle_to_horizon);
 
-      Serial.print("Angle to horizon:");
-      Serial.println(angle_2_horizon);
+      Log.notice("Angle to horizon: %F\n", angle_to_horizon);
 
       break;
 
@@ -712,7 +715,7 @@ void loop() {
         condition = Sleep_Transition;
         start_time = millis();
       }
-      if (abs(angle_2_horizon) > 15) {
+      if (abs(angle_to_horizon) > 15) {
         condition = Idle;
         start_time=millis();
       }
@@ -721,7 +724,7 @@ void loop() {
         ready_for_change = false;
         start_time=millis();
       } else {
-        LED("off");
+        led("off");
       }
       break;
 
@@ -729,7 +732,7 @@ void loop() {
       if (millis() - start_time > SLEEP_TRANSITION_MS) {
         sleepNow();
       } else {
-        LED("going_to_sleep");
+        led("going_to_sleep");
       }
       break;
   }
