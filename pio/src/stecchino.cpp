@@ -13,12 +13,13 @@
 #define ARRAY_SIZE(A) (sizeof(A) / sizeof((A)[0]))
 
 // Pins
-#define DATA_PIN      5 // orig: 10
-#define MOSFET_GATE   4 // orig: 11
-#define MPU_POWER_PIN 6 // orig: 9
-#define PUSH_B1       3 // orig: 2
+#define PIN_LED_DATA    5 // orig: 10
+#define PIN_MOSFET_GATE 4 // orig: 11
+#define PIN_MPU_POWER   6 // orig: 9
+#define PIN_BUTTON_1    3 // orig: 2
+#define PIN_INTERRUPT   8 // orig: 3
 
-#define BUTTON_1_ON (!digitalRead(PUSH_B1))
+#define BUTTON_1_ON (!digitalRead(PIN_BUTTON_1))
 
 // LEDs
 #define NUM_LEDS           72 // How many leds in your strip?
@@ -64,7 +65,13 @@ int16_t gx;
 int16_t gy;
 int16_t gz;
 
-String accel_status = String("unknown");
+enum class AccelStatus {
+  kFallen,
+  kStraight,
+  kUnknown,
+};
+
+AccelStatus accel_status = AccelStatus::kUnknown;
 
 RunningMedian a_forward_rolling_sample = RunningMedian(5);
 RunningMedian a_sideway_rolling_sample = RunningMedian(5);
@@ -75,16 +82,18 @@ int a_sideway_offset = 0;
 int a_vertical_offset = 0;
 
 // Used to detect position of buttons relative to Stecchino and user
-enum POSITION_STECCHINO {
-  NONE,
-  POSITION_1,
-  POSITION_2,
-  POSITION_3,
-  POSITION_4,
-  POSITION_5,
-  POSITION_6,
-  COUNT
+enum class Position {
+  kNone,
+  kPosition_1,
+  kPosition_2,
+  kPosition_3,
+  kPosition_4,
+  kPosition_5,
+  kPosition_6,
+  kCount,
 };
+
+Position orientation = Position::kNone;
 
 // POSITION_1: Stecchino V3/V4 horizontal with buttons up (idle)
 // POSITION_2: Stecchino V3/V4 horizontal with buttons down (force sleep)
@@ -92,18 +101,16 @@ enum POSITION_STECCHINO {
 // POSITION_4: Stecchino V3/V4 horizontal with short edge down (opposite to spirit level)
 // POSITION_5: Stecchino V3/V4 vertical with PCB up (normal game position = straight)
 // POSITION_6: Stecchino V3/V4 vertical with PCB down (easy game position = straight)
-const char * position_stecchino[COUNT] = {
+const char * position_stecchino[static_cast<int>(Position::kCount)] = {
   "None",
   "POSITION_1",
   "POSITION_2",
   "POSITION_3",
   "POSITION_4",
   "POSITION_5",
-  "POSITION_6"
+  "POSITION_6",
 };
 
-
-uint8_t orientation = NONE;
 
 unsigned long start_time = 0;
 
@@ -120,7 +127,7 @@ void confetti() {
 // a colored dot sweeping back and forth, with fading trails
 void sinelon() {
   fadeToBlackBy(leds, NUM_LEDS, 20);
-  int pos = beatsin16(13,0,NUM_LEDS);
+  int pos = beatsin16(13, 0, NUM_LEDS);
   leds[pos] += CHSV(hue, 255, 192);
 }
 
@@ -151,7 +158,7 @@ void rainbow() {
 
 // List of patterns to cycle through.  Each is defined as a separate function below.
 typedef void (*SimplePatternList[]) ();
-SimplePatternList g_patterns = {
+SimplePatternList patterns = {
   confetti,
   sinelon,
   juggle,
@@ -181,82 +188,104 @@ void ledsOn(int count, int record) {
     }
   }
 
-  // send the 'leds' array out to the actual LED strip
   FastLED.show();
-
-  // insert a delay to keep the framerate modest
   FastLED.delay(1000 / FRAMES_PER_SECOND);
 
   // slowly cycle the "base color" through the rainbow
   EVERY_N_MILLISECONDS(20) { hue++; }
 }
 
-void led(String pattern) {
-  if (pattern == "going_to_sleep") {
-    digitalWrite(MOSFET_GATE, HIGH);
+enum class Pattern {
+  kGameOver,
+  kGoingToSleep,
+  kIdle,
+  kOff,
+  kSpiritLevel,
+  kStartPlay,
+  kWahoo,
+};
+
+void led(Pattern pattern) {
+  Log.trace(F("led(): start\n"));
+
+  if (pattern == Pattern::kGoingToSleep) {
+    Log.verbose(F("Pattern: GOING_TO_SLEEP\n"));
+
+    digitalWrite(PIN_MOSFET_GATE, HIGH);
     FastLED.setBrightness(LOW_BRIGHTNESS);
     for (int i = 0; i < NUM_LEDS; ++i) {
       leds[i]=CRGB::Blue;
     }
   }
 
-  if (pattern == "idle"){
-    digitalWrite(MOSFET_GATE, HIGH);
+  if (pattern == Pattern::kIdle){
+    Log.verbose(F("Pattern: IDLE\n"));
+
+    digitalWrite(PIN_MOSFET_GATE, HIGH);
     FastLED.setBrightness(HIGH_BRIGHTNESS);
-    g_patterns[current_pattern_number]();
+    patterns[current_pattern_number]();
 
     //confetti();
     //rainbow();
   }
 
-  if (pattern == "start_play"){
-    digitalWrite(MOSFET_GATE, HIGH);
+  if (pattern == Pattern::kStartPlay){
+    Log.verbose(F("Pattern: START_PLAY\n"));
+
+    digitalWrite(PIN_MOSFET_GATE, HIGH);
     FastLED.setBrightness(LOW_BRIGHTNESS);
     for (int i = 0; i < NUM_LEDS; ++i) {
       leds[i] = CRGB::Green;
     }
   }
 
-  if (pattern == "wahoo"){
-    digitalWrite(MOSFET_GATE, HIGH);
+  if (pattern == Pattern::kWahoo){
+    Log.verbose(F("Pattern: WAHOO\n"));
+
+    digitalWrite(PIN_MOSFET_GATE, HIGH);
     FastLED.setBrightness(HIGH_BRIGHTNESS);
     redGlitter();
   }
 
-  if (pattern == "spirit_level") {
-    digitalWrite(MOSFET_GATE, HIGH);
+  if (pattern == Pattern::kSpiritLevel) {
+    Log.verbose(F("Pattern: SPIRIT_LEVEL\n"));
+
+    digitalWrite(PIN_MOSFET_GATE, HIGH);
     FastLED.setBrightness(HIGH_BRIGHTNESS);
     sinelon();
   }
 
-  if (pattern == "game_over") {
-    digitalWrite(MOSFET_GATE, HIGH);
+  if (pattern == Pattern::kGameOver) {
+    Log.verbose(F("Pattern: GAME_OVER\n"));
+
+    digitalWrite(PIN_MOSFET_GATE, HIGH);
     FastLED.setBrightness(LOW_BRIGHTNESS);
     for (int i = 0; i < NUM_LEDS; ++i) {
       leds[i] = CRGB::Red;
     }
   }
 
-  if (pattern == "off") {
+  if (pattern == Pattern::kOff) {
+    Log.verbose(F("Pattern: OFF\n"));
+
     for (int i = 0; i < NUM_LEDS; ++i) {
       //leds[i]=CRGB::Black;
       leds[i].nscale8(230);
     }
-    digitalWrite(MOSFET_GATE, LOW);
+    digitalWrite(PIN_MOSFET_GATE, LOW);
   }
 
-  // send the 'leds' array out to the actual LED strip
   FastLED.show();
-
-  // insert a delay to keep the framerate modest
   FastLED.delay(1000 / FRAMES_PER_SECOND);
 
   // slowly cycle the "base color" through the rainbow
   EVERY_N_MILLISECONDS(20) { hue++; }
+
+  Log.trace(F("led(): end\n"));
 }
 
 void spiritLevelLed(float angle) {
-  digitalWrite(MOSFET_GATE, HIGH);
+  digitalWrite(PIN_MOSFET_GATE, HIGH);
   FastLED.setBrightness(HIGH_BRIGHTNESS);
   int int_angle = int(angle);
   //int pos_led=map(int_angle,-90,90,1,NUM_LEDS);
@@ -271,10 +300,7 @@ void spiritLevelLed(float angle) {
     }
   }
 
-  // send the 'leds' array out to the actual LED strip
   FastLED.show();
-
-  // insert a delay to keep the framerate modest
   FastLED.delay(1000 / FRAMES_PER_SECOND);
 
   // slowly cycle the "base color" through the rainbow
@@ -283,13 +309,13 @@ void spiritLevelLed(float angle) {
 
 // bargraph showing battery level
 void showBatteryLevel(int vcc) {
-  Log.trace("showBatteryLevel(): start\n");
+  Log.trace(F("showBatteryLevel(): start\n"));
 
   Log.notice("VCC     : %dmV\n", vcc);
   Log.notice("LOW_VCC : %dmV\n", LOW_VCC);
   Log.notice("HIGH_VCC: %dmV\n", HIGH_VCC);
 
-  digitalWrite(MOSFET_GATE, HIGH);
+  digitalWrite(PIN_MOSFET_GATE, HIGH);
   FastLED.setBrightness(LOW_BRIGHTNESS);
 
   if (vcc < LOW_VCC) {
@@ -315,32 +341,22 @@ void showBatteryLevel(int vcc) {
     }
   }
 
-  Log.verbose("OCTOPUS %d\n", 1);
-
   FastLED.show();
-
-  Log.verbose("OCTOPUS %d\n", 2);
-
-  // insert a delay to keep the framerate modest
   FastLED.delay(1000 / FRAMES_PER_SECOND);
-
-  Log.verbose("OCTOPUS %d\n", 3);
 
   // slowly cycle the "base color" through the rainbow
   EVERY_N_MILLISECONDS(20) { hue++; }
 
-  Log.verbose("OCTOPUS %d\n", 4);
-
-  Log.trace("showBatteryLevel(): end\n");
+  Log.trace(F("showBatteryLevel(): end\n"));
 }
 
 void nextPattern() {
   // add one to the current pattern number, and wrap around at the end
-  current_pattern_number = (current_pattern_number + 1) % ARRAY_SIZE(g_patterns);
+  current_pattern_number = (current_pattern_number + 1) % ARRAY_SIZE(patterns);
 }
 
 void allOff() {
-  Log.trace("allOff(): start\n");
+  Log.trace(F("allOff(): start\n"));
 
   for (int i = 0; i < NUM_LEDS; ++i) {
     leds[i]=CRGB::Black;
@@ -348,33 +364,33 @@ void allOff() {
     FastLED.show();
   }
 
-  Log.trace("allOff(): end\n");
+  Log.trace(F("allOff(): end\n"));
 }
 
-enum {
-  Check_Battery,
-  Fake_Sleep,
-  Game_Over_Transition,
-  Idle,
-  Magic_Wand,
-  Play,
-  Sleep_Transition,
-  Spirit_Level,
-  Start_Play_Transition,
-  Wahoo,
-  Wake_Up_Transition
-} condition = Idle;
+enum class Condition {
+  kCheckBattery,
+  kFakeSleep,
+  kGameOverTransition,
+  kIdle,
+  kPlay,
+  kSleepTransition,
+  kSpiritLevel,
+  kStartPlayTransition,
+};
 
+Condition condition = Condition::kIdle;
+
+// Reads acceleration from MPU6050 to evaluate current condition.
+// Tunables:
+// Output values: accel_status=fallen or straight
+//                orientation=POSITION_1 to POSITION_6
+//                angle_to_horizon
 float checkAcceleration() {
-  // Reads acceleration from MPU6050 to evaluate current condition.
-  // Tunables:
-  // Output values: accel_status=fallen or straight
-  //                orientation=POSITION_1 to POSITION_6
-  //                angle_to_horizon
-  // Get accelerometer readings
+  Log.trace(F("checkAcceleration(): start\n"));
+
   accelgyro.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
 
-  float angle_to_horizon=0;
+  float angle_to_horizon = 0;
 
   // Offset accel readings
   //int a_forward_offset = -2;
@@ -397,56 +413,53 @@ float checkAcceleration() {
   int a_vertical_rolling_sample_median = a_vertical_rolling_sample.getMedian() - a_vertical_offset;
 
   // Evaluate current condition based on smoothed accelarations
-  accel_status = "unknown";
+  accel_status = AccelStatus::kUnknown;
   if (abs(a_sideway_rolling_sample_median) > abs(a_vertical_rolling_sample_median) ||
       abs(a_forward_rolling_sample_median) > abs(a_vertical_rolling_sample_median)) {
-    accel_status="fallen";
-  }
-
-  if (abs(a_sideway_rolling_sample_median) < abs(a_vertical_rolling_sample_median) &&
+    accel_status = AccelStatus::kFallen;
+  } else if (abs(a_sideway_rolling_sample_median) < abs(a_vertical_rolling_sample_median) &&
       abs(a_forward_rolling_sample_median) < abs(a_vertical_rolling_sample_median)) {
-    accel_status="straight";
+    accel_status = AccelStatus::kStraight;
   }
-  //else {accel_status="unknown";}
 
   if (a_vertical_rolling_sample_median >= 80 &&
       abs(a_forward_rolling_sample_median) <= 25 &&
       abs(a_sideway_rolling_sample_median) <= 25 &&
-      orientation != POSITION_6) {
+      orientation != Position::kPosition_6) {
     // coté 1 en haut
-    orientation = POSITION_6;
+    orientation = Position::kPosition_6;
   } else if (a_forward_rolling_sample_median >= 80 &&
       abs(a_vertical_rolling_sample_median) <= 25 &&
       abs(a_sideway_rolling_sample_median) <= 25 &&
-      orientation != POSITION_2) {
+      orientation != Position::kPosition_2) {
     // coté 2 en haut
-    orientation = POSITION_2;
+    orientation = Position::kPosition_2;
   } else if (a_vertical_rolling_sample_median <= -80 &&
       abs(a_forward_rolling_sample_median) <= 25 &&
       abs(a_sideway_rolling_sample_median) <= 25 &&
-      orientation != POSITION_5) {
+      orientation != Position::kPosition_5) {
     // coté 3 en haut
-    orientation = POSITION_5;
+    orientation = Position::kPosition_5;
   } else if (a_forward_rolling_sample_median <= -80 &&
       abs(a_vertical_rolling_sample_median) <= 25 &&
       abs(a_sideway_rolling_sample_median) <= 25 &&
-      orientation != POSITION_1) {
+      orientation != Position::kPosition_1) {
     // coté 4 en haut
-    orientation = POSITION_1;
+    orientation = Position::kPosition_1;
   } else if (a_sideway_rolling_sample_median >= 80 &&
       abs(a_vertical_rolling_sample_median) <= 25 &&
       abs(a_forward_rolling_sample_median) <= 25 &&
-      orientation != POSITION_3) {
+      orientation != Position::kPosition_3) {
     // coté LEDs en haut
-    orientation = POSITION_3;
+    orientation = Position::kPosition_3;
   } else if (a_sideway_rolling_sample_median <= -80 &&
       abs(a_vertical_rolling_sample_median) <= 25 &&
       abs(a_forward_rolling_sample_median) <= 25 &&
-      orientation != POSITION_4) {
+      orientation != Position::kPosition_4) {
     // coté batteries en haut
-    orientation = POSITION_4;
+    orientation = Position::kPosition_4;
   }  else {
-    // orientation = FACE_NONE;
+    // TODO throw an error?
   }
 
   angle_to_horizon = atan2(
@@ -455,24 +468,31 @@ float checkAcceleration() {
           abs(a_forward_rolling_sample_median)))) * 180 / PI;
 
   Log.notice(
-      "a_forward: %d a_sideway: %d a_vertical: %d - %s - %s - %F\n",
+      "a_forward: %d a_sideway: %d a_vertical: %d - %s - %d - %F\n",
       a_forward_rolling_sample_median,
       a_sideway_rolling_sample_median,
       a_vertical_rolling_sample_median,
-      position_stecchino[orientation],
-      accel_status.c_str(),
+      position_stecchino[static_cast<int>(orientation)],
+      accel_status,
       angle_to_horizon);
+
+  Log.trace(F("checkAcceleration(): end\n"));
 
   return angle_to_horizon;
 }
 
 void pinInterrupt(void) {
-  detachInterrupt(0);
+  Log.trace(F("pinInterrupt(): start\n"));
+
+  detachInterrupt(digitalPinToInterrupt(PIN_INTERRUPT));
+
+  Log.trace(F("pinInterrupt(): end\n"));
 }
 
 void sleepNow(void) {
-  // Set pin 2 as interrupt and attach handler:
-  attachInterrupt(0, pinInterrupt, LOW);
+  Log.trace(F("sleepNow(): start\n"));
+
+  attachInterrupt(digitalPinToInterrupt(PIN_INTERRUPT), pinInterrupt, LOW);
   delay(100);
 
   set_sleep_mode(SLEEP_MODE_PWR_DOWN);
@@ -481,31 +501,33 @@ void sleepNow(void) {
   sleep_enable();
 
   // Put the device to sleep:
-  digitalWrite(MOSFET_GATE, LOW);   // Turn LEDs off to indicate sleep.
-  digitalWrite(MPU_POWER_PIN, LOW); // Turn MPU off.
+  digitalWrite(PIN_MOSFET_GATE, LOW);   // Turn LEDs off to indicate sleep.
+  digitalWrite(PIN_MPU_POWER, LOW);     // Turn MPU off.
   sleep_mode();
 
   // Upon waking up, sketch continues from this point.
   sleep_disable();
-  digitalWrite(MOSFET_GATE, HIGH);   // Turn LEDs on to indicate awake.
-  digitalWrite(MPU_POWER_PIN, HIGH); // Turn MPU on.
+  digitalWrite(PIN_MOSFET_GATE, HIGH);   // Turn LEDs on to indicate awake.
+  digitalWrite(PIN_MPU_POWER, HIGH);     // Turn MPU on.
   delay(100);
 
-  // clear running median buffer
+  // Clear running median buffer.
   a_forward_rolling_sample.clear();
   a_sideway_rolling_sample.clear();
   a_vertical_rolling_sample.clear();
 
-  // retore MPU connection
+  // Retore MPU connection.
   Wire.begin();
   accelgyro.initialize();
   Log.notice("Restarting MPU\n");
 
-  condition = Check_Battery;
-  start_time=millis();
+  condition = Condition::kCheckBattery;
+  start_time = millis();
+
+  Log.trace(F("sleepNow(): end\n"));
 }
 
-long readVcc() {
+long readVcc(void) {
   // Read 1.1V reference against AVcc
   // set the reference to Vcc and the measurement to the internal 1.1V reference
 #if defined(__AVR_ATmega32U4__) || defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
@@ -546,31 +568,27 @@ void setup() {
   while (!Serial);
 
   Log.begin(LOG_LEVEL_VERBOSE, &Serial, true);
-  Log.trace("setup(): start\n");
+  Log.trace(F("setup(): start\n"));
 
-  // Configure push-button 1 with built-in pullup resitor.
-  pinMode(PUSH_B1, INPUT);
-  digitalWrite(PUSH_B1, HIGH);
+  pinMode(PIN_BUTTON_1, INPUT_PULLUP);
+  pinMode(PIN_INTERRUPT, INPUT);
 
-  pinMode(MOSFET_GATE, OUTPUT);
-  digitalWrite(MOSFET_GATE, HIGH);
+  pinMode(PIN_MOSFET_GATE, OUTPUT);
+  digitalWrite(PIN_MOSFET_GATE, HIGH);
 
-  pinMode(MPU_POWER_PIN, OUTPUT);
-  digitalWrite(MPU_POWER_PIN, HIGH);
+  pinMode(PIN_MPU_POWER, OUTPUT);
+  digitalWrite(PIN_MPU_POWER, HIGH);
+
 
   delay(500);
 
   // Setup LED strip.
-  Log.trace("Starting LEDs\n");
-  FastLED.addLeds<WS2812B, DATA_PIN, GRB>(leds, NUM_LEDS);
+  FastLED.addLeds<WS2812B, PIN_LED_DATA, GRB>(leds, NUM_LEDS);
   FastLED.setBrightness(LOW_BRIGHTNESS);
-  Log.trace("Started LEDs\n");
 
   // MPU
-  Log.trace("Starting MPU\n");
   Wire.begin();
   accelgyro.initialize();
-  Log.trace("Started MPU\n");
 
   //a_forward_offset=0;
   //a_sideway_offset=0;
@@ -587,118 +605,144 @@ void setup() {
 
   start_time = millis();
 
-  Log.trace("setup(): end\n");
+  Log.trace(F("setup(): end\n"));
 }
 
 void loop() {
+  Log.trace(F("loop(): start\n"));
+
   angle_to_horizon = checkAcceleration();
 
 //  Log.notice(condition);
 
   switch (condition) {
-    case Check_Battery:
+    case Condition::kCheckBattery:
+      Log.verbose(F("Condition: CHECK_BATTERY\n"));
+
       vcc = int(readVcc());
-      Log.notice("VCC=%dmV", vcc);
       showBatteryLevel(vcc);
       delay(2000);
       allOff();
-      condition = Idle;
+
+      condition = Condition::kIdle;
       break;
 
-    case Wake_Up_Transition:
-      break;
+    case Condition::kIdle:
+      Log.verbose(F("Condition: IDLE\n"));
 
-    case Idle:
       if (BUTTON_1_ON && ready_for_change) {
         //delay(20); // debouncing
         ready_for_change = false;
-        nextPattern();  // change light patterns when button is pressed
-        start_time = millis();  // restart counter to enjoy new pattern longer
+
+        // Change light patterns when button is pressed.
+        nextPattern();
+
+        // Restart counter to enjoy new pattern longer.
+        start_time = millis();
       }
+
       if (!BUTTON_1_ON) {
         ready_for_change = true;
       }
+
       if (millis() - start_time > IDLE_MS) {
-        condition = Fake_Sleep;
+        condition = Condition::kFakeSleep;
         start_time = millis();
       }
-      if (accel_status == "straight") {
-        condition = Start_Play_Transition;
+
+      if (accel_status == AccelStatus::kStraight) {
+        condition = Condition::kStartPlayTransition;
         start_time = millis();
       }
-      if (orientation == POSITION_3) {
-        condition = Spirit_Level;
+
+      if (orientation == Position::kPosition_3) {
+        condition = Condition::kSpiritLevel;
         start_time = millis();
       }
-      if (orientation == POSITION_2) {
-        condition = Sleep_Transition;
+
+      if (orientation == Position::kPosition_2) {
+        condition = Condition::kSleepTransition;
         start_time = millis();
       } else {
-        led("idle");
+        led(Pattern::kIdle);
       }
+
       break;
 
-    case Start_Play_Transition:
+    case Condition::kStartPlayTransition:
+      Log.verbose(F("Condition: START_PLAY_TRANSITION\n"));
       /*
       if (millis() - start_time > START_PLAY_TRANSITION_MS) {
-        condition = Play;
+        condition = Condition::kPlay;
         start_time=millis();
         previous_record_time = record_time;
       } else {
-        led("start_play");
+        led(START_PLAY);
       }
       */
 
       allOff();
-      condition = Play;
       start_time = millis();
       previous_record_time = record_time;
+
+      condition = Condition::kPlay;
       break;
 
-    case Play:
+    case Condition::kPlay:
+      Log.verbose(F("Condition: PLAY\n"));
+
       elapsed_time = (millis() - start_time) / 1000;
+
       if (elapsed_time > record_time) {
         record_time = elapsed_time;
       }
+
       if (elapsed_time > previous_record_time &&
           elapsed_time <= previous_record_time + 1 &&
           previous_record_time != 0) {
-        led("wahoo");
+        led(Pattern::kWahoo);
       }
+
       if (elapsed_time > MAX_PLAY_SECONDS) {
-        condition = Sleep_Transition;
+        condition = Condition::kSleepTransition;
         start_time = millis();
       }
+
       if (NUM_LEDS_PER_SECONDS * int(elapsed_time) >= NUM_LEDS) {
-        led("wahoo");
+        led(Pattern::kWahoo);
       } else {
         ledsOn(NUM_LEDS_PER_SECONDS * int(elapsed_time), NUM_LEDS_PER_SECONDS * int(record_time));
       }
-      if (accel_status == "fallen") {
-        condition = Game_Over_Transition;
+
+      if (accel_status == AccelStatus::kFallen) {
+        condition = Condition::kGameOverTransition;
         start_time=millis();
       }
+
       break;
 
-    case Wahoo:
-      break;
+    case Condition::kGameOverTransition:
+      Log.verbose(F("Condition: GAME_OVER_TRANSITION\n"));
 
-    case Game_Over_Transition:
       if (millis() - start_time > GAME_OVER_TRANSITION_MS) {
-        condition = Idle;
+        condition = Condition::kIdle;
         start_time = millis();
       } else {
-        led("game_over");
+        led(Pattern::kGameOver);
       }
+
       break;
 
-    case Spirit_Level:
-      if (orientation == POSITION_1 || orientation == POSITION_2) {
-        condition = Idle;
+    case Condition::kSpiritLevel:
+      Log.verbose(F("Condition: SPIRIT_LEVEL\n"));
+
+      if (orientation == Position::kPosition_1 || orientation == Position::kPosition_2) {
+        condition = Condition::kIdle;
         start_time = millis();
       }
+
       if (millis() - start_time > MAX_SPIRIT_LEVEL_MS) {
-        condition = Fake_Sleep;
+        condition = Condition::kFakeSleep;
         start_time=millis();
       }
       spiritLevelLed(angle_to_horizon);
@@ -707,36 +751,43 @@ void loop() {
 
       break;
 
-    case Magic_Wand:
-      break;
+    case Condition::kFakeSleep:
+      Log.verbose(F("Condition: FAKE_SLEEP\n"));
 
-    case Fake_Sleep:
       if (millis() - start_time > FAKE_SLEEP_MS) {
-        condition = Sleep_Transition;
+        condition = Condition::kSleepTransition;
         start_time = millis();
       }
+
       if (abs(angle_to_horizon) > 15) {
-        condition = Idle;
+        condition = Condition::kIdle;
         start_time=millis();
       }
+
       if (BUTTON_1_ON) {
-        condition = Idle;
+        condition = Condition::kIdle;
         ready_for_change = false;
         start_time=millis();
       } else {
-        led("off");
+        led(Pattern::kOff);
       }
+
       break;
 
-    case Sleep_Transition:
+    case Condition::kSleepTransition:
+      Log.verbose(F("Condition: SLEEP_TRANSITION\n"));
+
       if (millis() - start_time > SLEEP_TRANSITION_MS) {
         sleepNow();
       } else {
-        led("going_to_sleep");
+        led(Pattern::kGoingToSleep);
       }
+
       break;
   }
 
   FastLED.show();
+
+  Log.trace(F("loop(): end\n"));
 }
 
