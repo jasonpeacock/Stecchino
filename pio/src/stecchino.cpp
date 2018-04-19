@@ -16,8 +16,8 @@
 #define PIN_LED_DATA 5     // orig: 10
 #define PIN_MOSFET_GATE 4  // orig: 11
 #define PIN_MPU_POWER 6    // orig: 9
-#define PIN_BUTTON_1 3     // orig: 2
-#define PIN_INTERRUPT 8    // orig: 3
+#define PIN_BUTTON_1 8     // orig: 2
+#define PIN_INTERRUPT 3    // orig: 3
 
 #define BUTTON_1_ON (!digitalRead(PIN_BUTTON_1))
 
@@ -56,7 +56,7 @@ uint8_t current_pattern_number = 0;
 // Increment by 1 for each Frame of Transition, New/Changed connection(s) pattern.
 uint8_t frame_count = 0;
 
-MPU6050 accelgyro;
+MPU6050 mpu;
 
 int16_t ax;
 int16_t ay;
@@ -145,7 +145,7 @@ void bpm() {
   uint8_t       BeatsPerMinute = 62;
   CRGBPalette16 palette        = PartyColors_p;
   uint8_t       beat           = beatsin8(BeatsPerMinute, 64, 255);
-  for (int i = 0; i < NUM_LEDS; ++i) {  // 9948
+  for (int i = 0; i < NUM_LEDS; ++i) {
     leds[i] = ColorFromPalette(palette, hue + (i * 2), beat - hue + (i * 10));
   }
 }
@@ -387,7 +387,7 @@ Condition condition = Condition::kIdle;
 float checkAcceleration() {
   Log.trace(F("checkAcceleration(): start\n"));
 
-  accelgyro.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+  mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
 
   float angle_to_horizon = 0;
 
@@ -481,10 +481,15 @@ float checkAcceleration() {
   return angle_to_horizon;
 }
 
+volatile bool interrupted = false;
+
 void pinInterrupt(void) {
   Log.trace(F("pinInterrupt(): start\n"));
 
-  detachInterrupt(digitalPinToInterrupt(PIN_INTERRUPT));
+  if (interrupted) {
+    Log.notice(F("Interrupted, disabling interrupt\n"));
+    detachInterrupt(digitalPinToInterrupt(PIN_INTERRUPT));
+  }
 
   Log.trace(F("pinInterrupt(): end\n"));
 }
@@ -492,24 +497,37 @@ void pinInterrupt(void) {
 void sleepNow(void) {
   Log.trace(F("sleepNow(): start\n"));
 
-  attachInterrupt(digitalPinToInterrupt(PIN_INTERRUPT), pinInterrupt, LOW);
-  delay(100);
-
   set_sleep_mode(SLEEP_MODE_PWR_DOWN);
-
-  // Set sleep enable (SE) bit:
   sleep_enable();
+
+  interrupted = false;
+  attachInterrupt(digitalPinToInterrupt(PIN_INTERRUPT), pinInterrupt, LOW);
+
+  Log.trace(F("powering down\n"));
 
   // Put the device to sleep:
   digitalWrite(PIN_MOSFET_GATE, LOW);  // Turn LEDs off to indicate sleep.
-  digitalWrite(PIN_MPU_POWER, LOW);    // Turn MPU off.
+  // Turn MPU off.
+  // XXX digitalWrite(PIN_MPU_POWER, LOW);
+  delay(100); // XXX needed?
+
+  Log.trace(F("sleeping\n"));
+
+  Serial.flush();
   sleep_mode();
 
   // Upon waking up, sketch continues from this point.
+  Log.trace(F("woke\n"));
+  interrupted = true;
   sleep_disable();
-  digitalWrite(PIN_MOSFET_GATE, HIGH);  // Turn LEDs on to indicate awake.
-  digitalWrite(PIN_MPU_POWER, HIGH);    // Turn MPU on.
-  delay(100);
+
+  // Turn LEDs on to indicate awake.
+  digitalWrite(PIN_MOSFET_GATE, HIGH);
+
+  // Turn MPU on.
+  // XXX digitalWrite(PIN_MPU_POWER, HIGH);
+
+  delay(100); // XXX needed?
 
   // Clear running median buffer.
   a_forward_rolling_sample.clear();
@@ -518,7 +536,7 @@ void sleepNow(void) {
 
   // Retore MPU connection.
   Wire.begin();
-  accelgyro.initialize();
+  // XXX mpu.initialize();
   Log.notice("Restarting MPU\n");
 
   condition  = Condition::kCheckBattery;
@@ -566,14 +584,16 @@ bool          ready_for_change     = false;
 
 void setup() {
   Serial.begin(9600);
-  while (!Serial)
-    ;
+  while (!Serial) {
+    // Wait for Serial port to be ready.
+    delay(100);
+  };
 
   Log.begin(LOG_LEVEL_VERBOSE, &Serial, true);
   Log.trace(F("setup(): start\n"));
 
   pinMode(PIN_BUTTON_1, INPUT_PULLUP);
-  pinMode(PIN_INTERRUPT, INPUT);
+  pinMode(PIN_INTERRUPT, INPUT_PULLUP);
 
   pinMode(PIN_MOSFET_GATE, OUTPUT);
   digitalWrite(PIN_MOSFET_GATE, HIGH);
@@ -589,7 +609,35 @@ void setup() {
 
   // MPU
   Wire.begin();
-  accelgyro.initialize();
+  mpu.initialize();
+  if (mpu.testConnection()) {
+    Log.notice(F("MPU6050 connection successful\n"));
+
+    // Set to active-low (1) to trigger the LOW interrupt signal when motion is detected
+    // and wake via the interrupt pin which is set to HIGH.
+    mpu.setInterruptMode(true);
+
+    mpu.setIntMotionEnabled(true);
+    mpu.setMotionDetectionThreshold(1);
+    mpu.setMotionDetectionDuration(5);
+
+    Log.verbose(F("Interrupt mode       : [%T]\n"), mpu.getInterruptMode());
+    Log.verbose(F("Interrupt drive      : [%T]\n"), mpu.getInterruptDrive());
+    Log.verbose(F("Interrupt latch      : [%T]\n"), mpu.getInterruptLatch());
+    Log.verbose(F("Interrupt latch clean: [%T]\n"), mpu.getInterruptLatchClear());
+    Log.verbose(F("Interrupt freefall   : [%T]\n"), mpu.getIntFreefallEnabled());
+    Log.verbose(F("Interrupt motion     : [%T]\n"), mpu.getIntMotionEnabled());
+    Log.verbose(F("Interrupt zero motion: [%T]\n"), mpu.getIntZeroMotionEnabled());
+    Log.verbose(F("Interrupt data ready : [%T]\n"), mpu.getIntDataReadyEnabled());
+
+    Log.verbose(F("Motion detection threshold: [%d]\n"), mpu.getMotionDetectionThreshold());
+    Log.verbose(F("Motion detection duration : [%d]\n"), mpu.getMotionDetectionDuration());
+
+    Log.verbose(F("DLPF Mode: [%d]\n"), mpu.getDLPFMode());
+    Log.verbose(F("DHPF Mode: [%d]\n"), mpu.getDHPFMode());
+  } else {
+    Log.notice(F("MPU6050 connection failed\n"));
+  }
 
   //a_forward_offset=0;
   //a_sideway_offset=0;
