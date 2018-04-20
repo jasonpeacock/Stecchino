@@ -1,62 +1,26 @@
+// System
 #include <avr/interrupt.h>
 #include <avr/io.h>
 #include <avr/power.h>
 #include <avr/sleep.h>
 
-#include "ArduinoLog.h"
-#include "FastLED.h"
-#include "I2Cdev.h"
-#include "MPU6050.h"
-#include "RunningMedian.h"
-#include "Wire.h"
+// Uncomment to compile out all logging code, will significantly reduce the code size,
+// must come before the `ArduinoLog.h` include.
+//#define DISABLE_LOGGING
 
-#define ARRAY_SIZE(A) (sizeof(A) / sizeof((A)[0]))
+// Third-party
+#include <ArduinoLog.h>
+#include <FastLED.h>
+#include <I2Cdev.h>
+#include <MPU6050.h>
+#include <RunningMedian.h>
+#include <Wire.h>
 
-// Pins
-#define PIN_LED_DATA 5     // orig: 10
-#define PIN_MOSFET_GATE 4  // orig: 11
-#define PIN_MPU_POWER 6    // orig: 9
-#define PIN_BUTTON_1 8     // orig: 2
-#define PIN_INTERRUPT 3    // orig: 3
-
-#define BUTTON_1_ON (!digitalRead(PIN_BUTTON_1))
-
-// LEDs
-#define NUM_LEDS 72         // How many leds in your strip?
-#define HIGH_BRIGHTNESS 50  // Set LEDS brightness
-#define LOW_BRIGHTNESS 10   // Set LEDS brightness
-
-// Power Management
-#define IDLE_MS 20000              // how many milliseconds at idle before moving to Fake_sleep?
-#define FAKE_SLEEP_MS 60000        // how many milliseconds at Fake_sleep before moving to Sleep?
-#define MAX_SPIRIT_LEVEL_MS 20000  // how many milliseconds at Fake_sleep before moving to Sleep?
-#define MAX_PLAY_SECONDS 60        // how many seconds vertical before moving to Sleep?
-                                   // (in case Stecchino is forgotten vertical)
-
-#define NUM_LEDS_PER_SECONDS 2  // how many LEDs are turned on every second when playing?
-
-// LED Animation
-#define FRAMES_PER_SECOND 120
-#define WAKE_UP_TRANSITION_MS 1000    // duration of animation when system returns from sleep
-#define START_PLAY_TRANSITION_MS 500  // duration of animation when game starts
-#define GAME_OVER_TRANSITION_MS 1000  // duration of game over animation
-#define SLEEP_TRANSITION_MS 2000      // duration of animation to sleep
-
-#define LOW_VCC 2700   // lower vcc value when checking battery level
-#define HIGH_VCC 3350  // higher vcc value when checking battery level
-
-#define ACCELEROMETER_ORIENTATION 2  // 0, 1 or 2 to set the angle of the joystick
-
-// Rotating "base color" used by many of the patterns.
-uint8_t hue = 0;
-
-// Index number of which pattern is current.
-uint8_t current_pattern_number = 0;
-
-// Increment by 1 for each Frame of Transition, New/Changed connection(s) pattern.
-uint8_t frame_count = 0;
-
-MPU6050 mpu;
+// Local
+#include "Configuration.h"
+#include "LedPatterns.h"
+#include "Mpu.h"
+#include "ReadVcc.h"
 
 int16_t ax;
 int16_t ay;
@@ -101,7 +65,7 @@ Position orientation = Position::kNone;
 // POSITION_4: Stecchino V3/V4 horizontal with short edge down (opposite to spirit level)
 // POSITION_5: Stecchino V3/V4 vertical with PCB up (normal game position = straight)
 // POSITION_6: Stecchino V3/V4 vertical with PCB down (easy game position = straight)
-const char* position_stecchino[static_cast<int>(Position::kCount)] = {
+const char* kPositionNames[static_cast<int>(Position::kCount)] = {
   "None",
   "POSITION_1",
   "POSITION_2",
@@ -113,175 +77,30 @@ const char* position_stecchino[static_cast<int>(Position::kCount)] = {
 
 unsigned long start_time = 0;
 
-// Define the array of leds
-CRGB leds[NUM_LEDS];
-
-// random colored speckles that blink in and fade smoothly
-void confetti() {
-  fadeToBlackBy(leds, NUM_LEDS, 10);
-  int pos = random16(NUM_LEDS);
-  leds[pos] += CHSV(hue + random8(64), 200, 255);
-}
-
-// a colored dot sweeping back and forth, with fading trails
-void sinelon() {
-  fadeToBlackBy(leds, NUM_LEDS, 20);
-  int pos = beatsin16(13, 0, NUM_LEDS);
-  leds[pos] += CHSV(hue, 255, 192);
-}
-
-// eight colored dots, weaving in and out of sync with each other
-void juggle() {
-  fadeToBlackBy(leds, NUM_LEDS, 20);
-  byte dothue = 0;
-  for (int i = 0; i < 8; i++) {
-    leds[beatsin16(i + 7, 0, NUM_LEDS)] |= CHSV(dothue, 200, 255);
-    dothue += 32;
-  }
-}
-
-// colored stripes pulsing at a defined Beats-Per-Minute (BPM)
-void bpm() {
-  uint8_t       BeatsPerMinute = 62;
-  CRGBPalette16 palette        = PartyColors_p;
-  uint8_t       beat           = beatsin8(BeatsPerMinute, 64, 255);
-  for (int i = 0; i < NUM_LEDS; ++i) {
-    leds[i] = ColorFromPalette(palette, hue + (i * 2), beat - hue + (i * 10));
-  }
-}
-
-// FastLED's built-in rainbow generator
-void rainbow() {
-  fill_rainbow(leds, NUM_LEDS, hue, 7);
-}
-
-// List of patterns to cycle through.  Each is defined as a separate function below.
-typedef void (*SimplePatternList[])();
-SimplePatternList patterns = {
-  confetti,
-  sinelon,
-  juggle,
-  bpm,
-  rainbow
-};
-
-void redGlitter() {
-  frame_count += 1;
-  if (frame_count % 4 == 1) {  // Slow down frame rate
-    for (int i = 0; i < NUM_LEDS; ++i) {
-      leds[i] = CHSV(HUE_RED, 0, random8() < 60 ? random8() : random8(64));
-    }
-  }
-}
-
-void ledsOn(int count, int record) {
-  for (int i = 0; i < NUM_LEDS; ++i) {
-    if (i <= NUM_LEDS - count) {
-      leds[i] = CRGB::Black;
-    } else {
-      leds[i] = CHSV(hue, 255, 255);
-    }
-
-    if (i == NUM_LEDS - record) {
-      leds[i] = CRGB::Red;
-    }
-  }
-
-  FastLED.show();
-  FastLED.delay(1000 / FRAMES_PER_SECOND);
-
-  // slowly cycle the "base color" through the rainbow
-  EVERY_N_MILLISECONDS(20) { hue++; }
-}
-
-enum class Pattern {
-  kGameOver,
-  kGoingToSleep,
+enum class Condition {
+  kCheckBattery,
+  kFakeSleep,
+  kGameOverTransition,
   kIdle,
-  kOff,
+  kPlay,
+  kSleepTransition,
   kSpiritLevel,
-  kStartPlay,
-  kWahoo,
+  kStartPlayTransition,
+  kCount,
 };
 
-void led(Pattern pattern) {
-  Log.trace(F("led(): start\n"));
+Condition condition = Condition::kIdle;
 
-  if (pattern == Pattern::kGoingToSleep) {
-    Log.verbose(F("Pattern: GOING_TO_SLEEP\n"));
-
-    digitalWrite(PIN_MOSFET_GATE, HIGH);
-    FastLED.setBrightness(LOW_BRIGHTNESS);
-    for (int i = 0; i < NUM_LEDS; ++i) {
-      leds[i] = CRGB::Blue;
-    }
-  }
-
-  if (pattern == Pattern::kIdle) {
-    Log.verbose(F("Pattern: IDLE\n"));
-
-    digitalWrite(PIN_MOSFET_GATE, HIGH);
-    FastLED.setBrightness(HIGH_BRIGHTNESS);
-    patterns[current_pattern_number]();
-
-    //confetti();
-    //rainbow();
-  }
-
-  if (pattern == Pattern::kStartPlay) {
-    Log.verbose(F("Pattern: START_PLAY\n"));
-
-    digitalWrite(PIN_MOSFET_GATE, HIGH);
-    FastLED.setBrightness(LOW_BRIGHTNESS);
-    for (int i = 0; i < NUM_LEDS; ++i) {
-      leds[i] = CRGB::Green;
-    }
-  }
-
-  if (pattern == Pattern::kWahoo) {
-    Log.verbose(F("Pattern: WAHOO\n"));
-
-    digitalWrite(PIN_MOSFET_GATE, HIGH);
-    FastLED.setBrightness(HIGH_BRIGHTNESS);
-    redGlitter();
-  }
-
-  if (pattern == Pattern::kSpiritLevel) {
-    Log.verbose(F("Pattern: SPIRIT_LEVEL\n"));
-
-    digitalWrite(PIN_MOSFET_GATE, HIGH);
-    FastLED.setBrightness(HIGH_BRIGHTNESS);
-    sinelon();
-  }
-
-  if (pattern == Pattern::kGameOver) {
-    Log.verbose(F("Pattern: GAME_OVER\n"));
-
-    digitalWrite(PIN_MOSFET_GATE, HIGH);
-    FastLED.setBrightness(LOW_BRIGHTNESS);
-    for (int i = 0; i < NUM_LEDS; ++i) {
-      leds[i] = CRGB::Red;
-    }
-  }
-
-  if (pattern == Pattern::kOff) {
-    Log.verbose(F("Pattern: OFF\n"));
-
-    for (int i = 0; i < NUM_LEDS; ++i) {
-      //leds[i]=CRGB::Black;
-      leds[i].nscale8(230);
-    }
-    digitalWrite(PIN_MOSFET_GATE, LOW);
-  }
-
-  FastLED.show();
-  FastLED.delay(1000 / FRAMES_PER_SECOND);
-
-  // slowly cycle the "base color" through the rainbow
-  EVERY_N_MILLISECONDS(20) { hue++; }
-
-  Log.trace(F("led(): end\n"));
-}
+const char* kConditionNames[static_cast<int>(Condition::kCount)] = {
+  "CheckBattery",
+  "FakeSleep",
+  "GameOverTransition",
+  "Idle",
+  "Play",
+  "SleepTransition",
+  "SpiritLevel",
+  "StartPlayTransition",
+};
 
 void spiritLevelLed(float angle) {
   digitalWrite(PIN_MOSFET_GATE, HIGH);
@@ -307,12 +126,14 @@ void spiritLevelLed(float angle) {
 }
 
 // bargraph showing battery level
-void showBatteryLevel(int vcc) {
+void showBatteryLevel(void) {
   Log.trace(F("showBatteryLevel(): start\n"));
 
-  Log.notice("VCC     : %dmV\n", vcc);
-  Log.notice("LOW_VCC : %dmV\n", LOW_VCC);
-  Log.notice("HIGH_VCC: %dmV\n", HIGH_VCC);
+  int vcc = static_cast<int>(readVcc());
+
+  Log.notice(F("VCC     : %dmV\n"), vcc);
+  Log.notice(F("LOW_VCC : %dmV\n"), LOW_VCC);
+  Log.notice(F("HIGH_VCC: %dmV\n"), HIGH_VCC);
 
   digitalWrite(PIN_MOSFET_GATE, HIGH);
   FastLED.setBrightness(LOW_BRIGHTNESS);
@@ -324,7 +145,7 @@ void showBatteryLevel(int vcc) {
   }
 
   int pos_led = map(vcc, LOW_VCC, HIGH_VCC, 1, NUM_LEDS);
-  Log.verbose("Showing battery level at LED Position: %d\n", pos_led);
+  Log.verbose(F("Showing battery level at LED Position: %d\n"), pos_led);
 
   for (int i = 0; i < NUM_LEDS; ++i) {
     if (i <= pos_led) {
@@ -348,36 +169,6 @@ void showBatteryLevel(int vcc) {
 
   Log.trace(F("showBatteryLevel(): end\n"));
 }
-
-void nextPattern() {
-  // add one to the current pattern number, and wrap around at the end
-  current_pattern_number = (current_pattern_number + 1) % ARRAY_SIZE(patterns);
-}
-
-void allOff() {
-  Log.trace(F("allOff(): start\n"));
-
-  for (int i = 0; i < NUM_LEDS; ++i) {
-    leds[i] = CRGB::Black;
-    delay(10);
-    FastLED.show();
-  }
-
-  Log.trace(F("allOff(): end\n"));
-}
-
-enum class Condition {
-  kCheckBattery,
-  kFakeSleep,
-  kGameOverTransition,
-  kIdle,
-  kPlay,
-  kSleepTransition,
-  kSpiritLevel,
-  kStartPlayTransition,
-};
-
-Condition condition = Condition::kIdle;
 
 // Reads acceleration from MPU6050 to evaluate current condition.
 // Tunables:
@@ -472,7 +263,7 @@ float checkAcceleration() {
       a_forward_rolling_sample_median,
       a_sideway_rolling_sample_median,
       a_vertical_rolling_sample_median,
-      position_stecchino[static_cast<int>(orientation)],
+      kPositionNames[static_cast<int>(orientation)],
       accel_status,
       angle_to_horizon);
 
@@ -509,7 +300,7 @@ void sleepNow(void) {
   digitalWrite(PIN_MOSFET_GATE, LOW);  // Turn LEDs off to indicate sleep.
   // Turn MPU off.
   // XXX digitalWrite(PIN_MPU_POWER, LOW);
-  delay(100); // XXX needed?
+  delay(100);  // XXX needed?
 
   Log.trace(F("sleeping\n"));
 
@@ -527,50 +318,21 @@ void sleepNow(void) {
   // Turn MPU on.
   // XXX digitalWrite(PIN_MPU_POWER, HIGH);
 
-  delay(100); // XXX needed?
+  delay(100);  // XXX needed?
 
   // Clear running median buffer.
   a_forward_rolling_sample.clear();
   a_sideway_rolling_sample.clear();
   a_vertical_rolling_sample.clear();
 
-  // Retore MPU connection.
-  Wire.begin();
-  // XXX mpu.initialize();
-  Log.notice("Restarting MPU\n");
+  // Restore MPU connection.
+  Log.notice(F("Restarting MPU\n"));
+  setupMpu(mpu);
 
   condition  = Condition::kCheckBattery;
   start_time = millis();
 
   Log.trace(F("sleepNow(): end\n"));
-}
-
-long readVcc(void) {
-  // Read 1.1V reference against AVcc
-  // set the reference to Vcc and the measurement to the internal 1.1V reference
-#if defined(__AVR_ATmega32U4__) || defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
-  ADMUX = _BV(REFS0) | _BV(MUX4) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
-#elif defined(__AVR_ATtiny24__) || defined(__AVR_ATtiny44__) || defined(__AVR_ATtiny84__)
-  ADMUX = _BV(MUX5) | _BV(MUX0);
-#elif defined(__AVR_ATtiny25__) || defined(__AVR_ATtiny45__) || defined(__AVR_ATtiny85__)
-  ADMUX = _BV(MUX3) | _BV(MUX2);
-#else
-  ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
-#endif
-
-  delay(2);  // Wait for Vref to settle
-
-  ADCSRA |= _BV(ADSC);  // Start conversion
-  while (bit_is_set(ADCSRA, ADSC))
-    ;  // measuring
-
-  uint8_t low  = ADCL;  // must read ADCL first - it then locks ADCH
-  uint8_t high = ADCH;  // unlocks both
-
-  long result = (high << 8) | low;
-
-  result = 1125300L / result;  // Calculate Vcc (in mV); 1125300 = 1.1*1023*1000
-  return result;               // Vcc in millivolts
 }
 
 unsigned long current_time         = 0;
@@ -582,103 +344,26 @@ int           vcc                  = 0;
 float         angle_to_horizon     = 0;
 bool          ready_for_change     = false;
 
-void setup() {
-  Serial.begin(9600);
-  while (!Serial) {
-    // Wait for Serial port to be ready.
-    delay(100);
-  };
+void checkCondition() {
+  Log.trace(F("checkCondition(): start\n"));
 
-  Log.begin(LOG_LEVEL_VERBOSE, &Serial, true);
-  Log.trace(F("setup(): start\n"));
-
-  pinMode(PIN_BUTTON_1, INPUT_PULLUP);
-  pinMode(PIN_INTERRUPT, INPUT_PULLUP);
-
-  pinMode(PIN_MOSFET_GATE, OUTPUT);
-  digitalWrite(PIN_MOSFET_GATE, HIGH);
-
-  pinMode(PIN_MPU_POWER, OUTPUT);
-  digitalWrite(PIN_MPU_POWER, HIGH);
-
-  delay(500);
-
-  // Setup LED strip.
-  FastLED.addLeds<WS2812B, PIN_LED_DATA, GRB>(leds, NUM_LEDS);
-  FastLED.setBrightness(LOW_BRIGHTNESS);
-
-  // MPU
-  Wire.begin();
-  mpu.initialize();
-  if (mpu.testConnection()) {
-    Log.notice(F("MPU6050 connection successful\n"));
-
-    // Set to active-low (1) to trigger the LOW interrupt signal when motion is detected
-    // and wake via the interrupt pin which is set to HIGH.
-    mpu.setInterruptMode(true);
-
-    mpu.setIntMotionEnabled(true);
-    mpu.setMotionDetectionThreshold(1);
-    mpu.setMotionDetectionDuration(5);
-
-    Log.verbose(F("Interrupt mode       : [%T]\n"), mpu.getInterruptMode());
-    Log.verbose(F("Interrupt drive      : [%T]\n"), mpu.getInterruptDrive());
-    Log.verbose(F("Interrupt latch      : [%T]\n"), mpu.getInterruptLatch());
-    Log.verbose(F("Interrupt latch clean: [%T]\n"), mpu.getInterruptLatchClear());
-    Log.verbose(F("Interrupt freefall   : [%T]\n"), mpu.getIntFreefallEnabled());
-    Log.verbose(F("Interrupt motion     : [%T]\n"), mpu.getIntMotionEnabled());
-    Log.verbose(F("Interrupt zero motion: [%T]\n"), mpu.getIntZeroMotionEnabled());
-    Log.verbose(F("Interrupt data ready : [%T]\n"), mpu.getIntDataReadyEnabled());
-
-    Log.verbose(F("Motion detection threshold: [%d]\n"), mpu.getMotionDetectionThreshold());
-    Log.verbose(F("Motion detection duration : [%d]\n"), mpu.getMotionDetectionDuration());
-
-    Log.verbose(F("DLPF Mode: [%d]\n"), mpu.getDLPFMode());
-    Log.verbose(F("DHPF Mode: [%d]\n"), mpu.getDHPFMode());
-  } else {
-    Log.notice(F("MPU6050 connection failed\n"));
-  }
-
-  //a_forward_offset=0;
-  //a_sideway_offset=0;
-  //a_vertical_offset=-100;
-
-  //delay(2000);
-
-  vcc = static_cast<int>(readVcc());
-  showBatteryLevel(vcc);
-
-  delay(2000);
-
-  allOff();
-
-  start_time = millis();
-
-  Log.trace(F("setup(): end\n"));
-}
-
-void loop() {
-  Log.trace(F("loop(): start\n"));
+  Log.notice(F("Condition: [%s]\n"), kConditionNames[static_cast<int>(condition)]);
 
   angle_to_horizon = checkAcceleration();
 
-  //  Log.notice(condition);
-
   switch (condition) {
-    case Condition::kCheckBattery:
-      Log.verbose(F("Condition: CHECK_BATTERY\n"));
+    case Condition::kCount:
+      break;
 
-      vcc = int(readVcc());
-      showBatteryLevel(vcc);
+    case Condition::kCheckBattery:
+      showBatteryLevel();
       delay(2000);
-      allOff();
+      allOff(leds);
 
       condition = Condition::kIdle;
       break;
 
     case Condition::kIdle:
-      Log.verbose(F("Condition: IDLE\n"));
-
       if (BUTTON_1_ON && ready_for_change) {
         //delay(20); // debouncing
         ready_for_change = false;
@@ -713,24 +398,23 @@ void loop() {
         condition  = Condition::kSleepTransition;
         start_time = millis();
       } else {
-        led(Pattern::kIdle);
+        led(leds, Pattern::kIdle);
       }
 
       break;
 
     case Condition::kStartPlayTransition:
-      Log.verbose(F("Condition: START_PLAY_TRANSITION\n"));
       /*
       if (millis() - start_time > START_PLAY_TRANSITION_MS) {
         condition = Condition::kPlay;
         start_time=millis();
         previous_record_time = record_time;
       } else {
-        led(START_PLAY);
+        led(leds, Pattern::kStartPlay);
       }
       */
 
-      allOff();
+      allOff(leds);
       start_time           = millis();
       previous_record_time = record_time;
 
@@ -738,8 +422,6 @@ void loop() {
       break;
 
     case Condition::kPlay:
-      Log.verbose(F("Condition: PLAY\n"));
-
       elapsed_time = (millis() - start_time) / 1000;
 
       if (elapsed_time > record_time) {
@@ -749,7 +431,7 @@ void loop() {
       if (elapsed_time > previous_record_time &&
           elapsed_time <= previous_record_time + 1 &&
           previous_record_time != 0) {
-        led(Pattern::kWahoo);
+        led(leds, Pattern::kWahoo);
       }
 
       if (elapsed_time > MAX_PLAY_SECONDS) {
@@ -758,9 +440,9 @@ void loop() {
       }
 
       if (NUM_LEDS_PER_SECONDS * int(elapsed_time) >= NUM_LEDS) {
-        led(Pattern::kWahoo);
+        led(leds, Pattern::kWahoo);
       } else {
-        ledsOn(NUM_LEDS_PER_SECONDS * int(elapsed_time), NUM_LEDS_PER_SECONDS* int(record_time));
+        ledsOn(leds, NUM_LEDS_PER_SECONDS * int(elapsed_time), NUM_LEDS_PER_SECONDS* int(record_time));
       }
 
       if (accel_status == AccelStatus::kFallen) {
@@ -771,20 +453,16 @@ void loop() {
       break;
 
     case Condition::kGameOverTransition:
-      Log.verbose(F("Condition: GAME_OVER_TRANSITION\n"));
-
       if (millis() - start_time > GAME_OVER_TRANSITION_MS) {
         condition  = Condition::kIdle;
         start_time = millis();
       } else {
-        led(Pattern::kGameOver);
+        led(leds, Pattern::kGameOver);
       }
 
       break;
 
     case Condition::kSpiritLevel:
-      Log.verbose(F("Condition: SPIRIT_LEVEL\n"));
-
       if (orientation == Position::kPosition_1 || orientation == Position::kPosition_2) {
         condition  = Condition::kIdle;
         start_time = millis();
@@ -794,15 +472,12 @@ void loop() {
         condition  = Condition::kFakeSleep;
         start_time = millis();
       }
-      spiritLevelLed(angle_to_horizon);
 
-      Log.notice("Angle to horizon: %F\n", angle_to_horizon);
+      spiritLevelLed(angle_to_horizon);
 
       break;
 
     case Condition::kFakeSleep:
-      Log.verbose(F("Condition: FAKE_SLEEP\n"));
-
       if (millis() - start_time > FAKE_SLEEP_MS) {
         condition  = Condition::kSleepTransition;
         start_time = millis();
@@ -818,22 +493,66 @@ void loop() {
         ready_for_change = false;
         start_time       = millis();
       } else {
-        led(Pattern::kOff);
+        led(leds, Pattern::kOff);
       }
 
       break;
 
     case Condition::kSleepTransition:
-      Log.verbose(F("Condition: SLEEP_TRANSITION\n"));
-
       if (millis() - start_time > SLEEP_TRANSITION_MS) {
         sleepNow();
       } else {
-        led(Pattern::kGoingToSleep);
+        led(leds, Pattern::kGoingToSleep);
       }
 
       break;
   }
+
+  Log.trace(F("checkCondition(): end\n"));
+}
+
+void setup() {
+  Serial.begin(9600);
+  while (!Serial) {
+    // Wait for the Serial port to be ready.
+    delay(100);
+  }
+
+  Log.begin(LOG_LEVEL_VERBOSE, &Serial, true);
+  Log.trace(F("setup(): start\n"));
+
+  pinMode(PIN_BUTTON_1, INPUT_PULLUP);
+  pinMode(PIN_INTERRUPT, INPUT_PULLUP);
+
+  pinMode(PIN_MOSFET_GATE, OUTPUT);
+  digitalWrite(PIN_MOSFET_GATE, HIGH);
+
+  pinMode(PIN_MPU_POWER, OUTPUT);
+  digitalWrite(PIN_MPU_POWER, HIGH);
+
+  delay(500);
+
+  // Setup LED strip.
+  FastLED.addLeds<WS2812B, PIN_LED_DATA, GRB>(leds, NUM_LEDS);
+  FastLED.setBrightness(LOW_BRIGHTNESS);
+
+  setupMpu(mpu);
+
+  showBatteryLevel();
+
+  delay(2000);
+
+  allOff(leds);
+
+  start_time = millis();
+
+  Log.trace(F("setup(): end\n"));
+}
+
+void loop() {
+  Log.trace(F("loop(): start\n"));
+
+  checkCondition();
 
   FastLED.show();
 
