@@ -114,18 +114,6 @@ void ledsOn(CRGB leds[], int count, int record) {
   EVERY_N_MILLISECONDS(20) { hue++; }
 }
 
-void allOff(CRGB leds[]) {
-  Log.trace(F("allOff(): start\n"));
-
-  for (int i = 0; i < NUM_LEDS; ++i) {
-    leds[i] = CRGB::Black;
-    delay(10);
-    FastLED.show();
-  }
-
-  Log.trace(F("allOff(): end\n"));
-}
-
 void led(CRGB leds[], Pattern pattern) {
   Log.trace(F("led(): start\n"));
 

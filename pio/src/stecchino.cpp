@@ -4,13 +4,19 @@
 
 // Third-party
 #include <ArduinoLog.h>
-#include <FastLED.h>
-#include <MPU6050.h>
 
 // Local
 #include "Condition.h"
 #include "Configuration.h"
+#include "LedStrip.h"
 #include "Mpu.h"
+#include "Position.h"
+
+BatteryLevel *battery_level;
+Condition *   condition;
+LedStrip *    led_strip;
+Mpu *         mpu;
+Position *    position;
 
 void setup() {
   Serial.begin(9600);
@@ -25,21 +31,22 @@ void setup() {
   pinMode(PIN_BUTTON_1, INPUT_PULLUP);
   pinMode(PIN_INTERRUPT, INPUT_PULLUP);
 
-  pinMode(PIN_MOSFET_GATE, OUTPUT);
-  digitalWrite(PIN_MOSFET_GATE, HIGH);
-
   pinMode(PIN_MPU_POWER, OUTPUT);
   digitalWrite(PIN_MPU_POWER, HIGH);
 
-  delay(500);
+  led_strip = new LedStrip();
+  led_strip->Setup();
 
-  // Setup LED strip.
-  FastLED.addLeds<WS2812B, PIN_LED_DATA, GRB>(leds, NUM_LEDS);
-  FastLED.setBrightness(LOW_BRIGHTNESS);
+  battery_level = new BatteryLevel(led_strip);
 
-  setupMpu(mpu);
+  mpu = new Mpu();
+  mpu->Setup();
 
-  start_time = millis();
+  position = new Position(mpu);
+  position->Setup();
+
+  condition = new Condition(led_strip, mpu, battery_level);
+  condition->Setup();
 
   Log.trace(F("setup(): end\n"));
 }
@@ -47,12 +54,15 @@ void setup() {
 void loop() {
   Log.trace(F("loop(): start\n"));
 
-  checkCondition(leds, mpu);
+  position->Update();
 
-  // Slowly cycle the "base color" through the rainbow.
-  EVERY_N_MILLISECONDS(20) { hue++; }
+  float angle_to_horizon = position->GetAngleToHorizon();
+  Position::AccelStatus accel_status = position->GetAccelStatus();
+  Position::Orientation orientation = position->GetOrientation();
 
-  FastLED.show();
+  condition->Update(angle_to_horizon, accel_status, orientation);
+
+  led_strip->Update();
 
   Log.trace(F("loop(): end\n"));
 }
