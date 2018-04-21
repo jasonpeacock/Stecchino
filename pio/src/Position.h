@@ -5,26 +5,10 @@
 
 #include "Configuration.h"
 #include "Mpu.h"
+#include "Stecchino.h"
 
 class Position {
  public:
-  enum class AccelStatus {
-    kFallen,
-    kStraight,
-    kUnknown,
-  };
-
-  // Used to detect position of buttons relative to Stecchino and user
-  enum class Orientation {
-    kNone,
-    kPosition_1,
-    kPosition_2,
-    kPosition_3,
-    kPosition_4,
-    kPosition_5,
-    kPosition_6,
-  };
-
   Position(Mpu* mpu);
 
   void Setup(void);
@@ -33,9 +17,9 @@ class Position {
 
   void ClearSampleBuffer(void);
 
-  AccelStatus GetAccelStatus(void);
+  Stecchino::AccelStatus GetAccelStatus(void);
 
-  Orientation GetOrientation(void);
+  Stecchino::Orientation GetOrientation(void);
 
   float GetAngleToHorizon(void);
 
@@ -62,8 +46,8 @@ class Position {
   RunningMedian sideway_rolling_sample_  = RunningMedian(kRunningMedianBufferSize);
   RunningMedian vertical_rolling_sample_ = RunningMedian(kRunningMedianBufferSize);
 
-  AccelStatus accel_status_ = AccelStatus::kUnknown;
-  Orientation orientation_  = Orientation::kNone;
+  Stecchino::AccelStatus accel_status_ = Stecchino::AccelStatus::kUnknown;
+  Stecchino::Orientation orientation_  = Stecchino::Orientation::kNone;
 
   Mpu* mpu_;
 };

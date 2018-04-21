@@ -3,7 +3,7 @@
 #include "BatteryLevel.h"
 #include "LedStrip.h"
 #include "Mpu.h"
-#include "Position.h"
+#include "Stecchino.h"
 
 class Condition {
  public:
@@ -11,7 +11,7 @@ class Condition {
 
   void Setup(void);
 
-  void Update(float angle_to_horizon, Position::AccelStatus accel_status, Position::Orientation orientation);
+  void Update(float angle_to_horizon, Stecchino::AccelStatus accel_status, Stecchino::Orientation orientation);
 
  private:
   enum class State {

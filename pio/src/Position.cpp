@@ -5,6 +5,7 @@
 
 #include "ArduinoLog.h"
 #include "Mpu.h"
+#include "Stecchino.h"
 
 Position::Position(Mpu* mpu) : mpu_(mpu) {}
 
@@ -42,15 +43,15 @@ void Position::Update(void) {
   float sideway_rolling_sample_median  = sideway_rolling_sample_.getMedian() - kSidewayOffset;
   float vertical_rolling_sample_median = vertical_rolling_sample_.getMedian() - kVerticalOffset;
 
-  accel_status_ = AccelStatus::kUnknown;
+  accel_status_ = Stecchino::AccelStatus::kUnknown;
 
   // Evaluate current condition based on smoothed accelarations
   if (abs(sideway_rolling_sample_median) > abs(vertical_rolling_sample_median) ||
       abs(forward_rolling_sample_median) > abs(vertical_rolling_sample_median)) {
-    accel_status_ = AccelStatus::kFallen;
+    accel_status_ = Stecchino::AccelStatus::kFallen;
   } else if (abs(sideway_rolling_sample_median) < abs(vertical_rolling_sample_median) &&
              abs(forward_rolling_sample_median) < abs(vertical_rolling_sample_median)) {
-    accel_status_ = AccelStatus::kStraight;
+    accel_status_ = Stecchino::AccelStatus::kStraight;
   }
 
   if (vertical_rolling_sample_median >= 80 &&
@@ -58,37 +59,37 @@ void Position::Update(void) {
       abs(sideway_rolling_sample_median) <= 25) {
     // Stecchino vertical with PCB down (easy game position = straight)
     Log.notice(F("Orientation: Position 6\n"));
-    orientation_ = Orientation::kPosition_6;
+    orientation_ = Stecchino::Orientation::kPosition_6;
   } else if (forward_rolling_sample_median >= 80 &&
              abs(vertical_rolling_sample_median) <= 25 &&
              abs(sideway_rolling_sample_median) <= 25) {
     // Stecchino horizontal with buttons down (force sleep)
     Log.notice(F("Orientation: Position 2\n"));
-    orientation_ = Orientation::kPosition_2;
+    orientation_ = Stecchino::Orientation::kPosition_2;
   } else if (vertical_rolling_sample_median <= -80 &&
              abs(forward_rolling_sample_median) <= 25 &&
              abs(sideway_rolling_sample_median) <= 25) {
     // Stecchino vertical with PCB up (normal game position = straight)
     Log.notice(F("Orientation: Position 5\n"));
-    orientation_ = Orientation::kPosition_5;
+    orientation_ = Stecchino::Orientation::kPosition_5;
   } else if (forward_rolling_sample_median <= -80 &&
              abs(vertical_rolling_sample_median) <= 25 &&
              abs(sideway_rolling_sample_median) <= 25) {
     // Stecchino horizontal with buttons up (idle)
     Log.notice(F("Orientation: Position 1\n"));
-    orientation_ = Orientation::kPosition_1;
+    orientation_ = Stecchino::Orientation::kPosition_1;
   } else if (sideway_rolling_sample_median >= 80 &&
              abs(vertical_rolling_sample_median) <= 25 &&
              abs(forward_rolling_sample_median) <= 25) {
     // Stecchino horizontal with long edge down (spirit level)
     Log.notice(F("Orientation: Position 3\n"));
-    orientation_ = Orientation::kPosition_3;
+    orientation_ = Stecchino::Orientation::kPosition_3;
   } else if (sideway_rolling_sample_median <= -80 &&
              abs(vertical_rolling_sample_median) <= 25 &&
              abs(forward_rolling_sample_median) <= 25) {
     // Stecchino horizontal with short edge down (opposite to spirit level)
     Log.notice(F("Orientation: Position 4\n"));
-    orientation_ = Orientation::kPosition_4;
+    orientation_ = Stecchino::Orientation::kPosition_4;
   } else {
     // TODO throw an error?
   }
@@ -117,11 +118,11 @@ void Position::ClearSampleBuffer(void) {
   vertical_rolling_sample_.clear();
 }
 
-Position::AccelStatus Position::GetAccelStatus(void) {
+Stecchino::AccelStatus Position::GetAccelStatus(void) {
   return accel_status_;
 }
 
-Position::Orientation Position::GetOrientation(void) {
+Stecchino::Orientation Position::GetOrientation(void) {
   return orientation_;
 }
 

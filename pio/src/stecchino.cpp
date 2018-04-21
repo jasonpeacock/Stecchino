@@ -11,6 +11,7 @@
 #include "LedStrip.h"
 #include "Mpu.h"
 #include "Position.h"
+#include "Stecchino.h"
 
 BatteryLevel *battery_level;
 Condition *   condition;
@@ -57,8 +58,8 @@ void loop() {
   position->Update();
 
   float angle_to_horizon = position->GetAngleToHorizon();
-  Position::AccelStatus accel_status = position->GetAccelStatus();
-  Position::Orientation orientation = position->GetOrientation();
+  Stecchino::AccelStatus accel_status = position->GetAccelStatus();
+  Stecchino::Orientation orientation = position->GetOrientation();
 
   condition->Update(angle_to_horizon, accel_status, orientation);
 

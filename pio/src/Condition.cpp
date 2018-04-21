@@ -10,9 +10,9 @@
 #include "LedPatterns.h"
 #include "LedStrip.h"
 #include "Mpu.h"
-#include "Position.h"
 #include "SleepNow.h"
 #include "SpiritLevel.h"
+#include "Stecchino.h"
 
 Condition::Condition(LedStrip* led_strip, Mpu* mpu, BatteryLevel* battery_level) : led_strip_(led_strip), mpu_(mpu), battery_level_(battery_level) {}
 
@@ -20,7 +20,7 @@ void Condition::Setup(void) {
   start_time_ = millis();
 }
 
-void Condition::Update(float angle_to_horizon, Position::AccelStatus accel_status, Position::Orientation orientation) {
+void Condition::Update(float angle_to_horizon, Stecchino::AccelStatus accel_status, Stecchino::Orientation orientation) {
   Log.trace(F("Condition::Update(): start\n"));
 
   switch (state_) {
@@ -56,17 +56,17 @@ void Condition::Update(float angle_to_horizon, Position::AccelStatus accel_statu
         start_time_ = millis();
       }
 
-      if (accel_status == Position::AccelStatus::kStraight) {
+      if (accel_status == Stecchino::AccelStatus::kStraight) {
         state_      = State::kStartPlayTransition;
         start_time_ = millis();
       }
 
-      if (orientation == Position::Orientation::kPosition_3) {
+      if (orientation == Stecchino::Orientation::kPosition_3) {
         state_      = State::kSpiritLevel;
         start_time_ = millis();
       }
 
-      if (orientation == Position::Orientation::kPosition_2) {
+      if (orientation == Stecchino::Orientation::kPosition_2) {
         state_      = State::kSleepTransition;
         start_time_ = millis();
       } else {
@@ -118,7 +118,7 @@ void Condition::Update(float angle_to_horizon, Position::AccelStatus accel_statu
                NUM_LEDS_PER_SECONDS * static_cast<int>(record_time_));
       }
 
-      if (accel_status == Position::AccelStatus::kFallen) {
+      if (accel_status == Stecchino::AccelStatus::kFallen) {
         state_      = State::kGameOverTransition;
         start_time_ = millis();
       }
@@ -136,7 +136,7 @@ void Condition::Update(float angle_to_horizon, Position::AccelStatus accel_statu
     break;
 
     case State::kSpiritLevel: {
-      if (orientation == Position::Orientation::kPosition_1 || orientation == Position::Orientation::kPosition_2) {
+      if (orientation == Stecchino::Orientation::kPosition_1 || orientation == Stecchino::Orientation::kPosition_2) {
         state_      = State::kIdle;
         start_time_ = millis();
       }
