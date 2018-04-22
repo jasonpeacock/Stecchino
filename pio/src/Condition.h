@@ -6,35 +6,47 @@
 #include "Stecchino.h"
 
 class Condition {
- public:
-  Condition(LedStrip* led_strip, Mpu* mpu, BatteryLevel* battery_level);
+  public:
+    Condition(LedStrip * led_strip, Mpu * mpu, BatteryLevel * battery_level);
 
-  void Setup(void);
+    void Setup(void);
 
-  void Update(float angle_to_horizon, Stecchino::AccelStatus accel_status, Stecchino::Orientation orientation);
+    void Update(const float                  angle_to_horizon,
+                const Stecchino::AccelStatus accel_status,
+                const Stecchino::Orientation orientation);
 
- private:
-  enum class State {
-    kCheckBattery,
-    kFakeSleep,
-    kGameOverTransition,
-    kIdle,
-    kPlay,
-    kSleepTransition,
-    kSpiritLevel,
-    kStartPlayTransition,
-    kCount,
-  };
+    Stecchino::State GetState() const { return state_; };
 
-  // Display battery level at startup as the initial state.
-  State state_ = State::kCheckBattery;
+  private:
+    Stecchino::State state_;
 
-  LedStrip*     led_strip_;
-  Mpu*          mpu_;
-  BatteryLevel* battery_level_;
+    LedStrip *     led_strip_;
+    Mpu *          mpu_;
+    BatteryLevel * battery_level_;
 
-  unsigned long start_time_           = 0;
-  unsigned long record_time_          = 0;
-  unsigned long previous_record_time_ = 0;
-  bool          ready_for_change_     = false;
+    // When the current state was entered, so we can tell when it's time to
+    // expire the state and transition to a new state.
+    unsigned long start_time_ = 0;
+
+    unsigned long record_time_          = 0;
+    unsigned long previous_record_time_ = 0;
+    bool          ready_for_change_     = false;
+
+    void SetState(const Stecchino::State state);
+
+    void CheckBattery(void);
+
+    void Idle(const Stecchino::AccelStatus accel_status, const Stecchino::Orientation orientation);
+
+    void StartPlayTransition(void);
+
+    void Play(const Stecchino::AccelStatus accel_status);
+
+    void GameOverTransition(void);
+
+    void SpiritLevel(const float angle_to_horizon, const Stecchino::Orientation orientation);
+
+    void FakeSleep(const float angle_to_horizon);
+
+    void SleepTransition(void);
 };

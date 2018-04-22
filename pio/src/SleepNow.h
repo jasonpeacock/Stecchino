@@ -10,50 +10,50 @@
 volatile bool interrupted = false;
 
 void pinInterrupt(void) {
-  Log.trace(F("pinInterrupt(): start\n"));
+    Log.trace(F("pinInterrupt(): start\n"));
 
-  if (interrupted) {
-    Log.notice(F("Interrupted, disabling interrupt\n"));
-    detachInterrupt(digitalPinToInterrupt(PIN_INTERRUPT));
-  }
+    if (interrupted) {
+        Log.notice(F("Interrupted, disabling interrupt\n"));
+        detachInterrupt(digitalPinToInterrupt(PIN_INTERRUPT));
+    }
 
-  Log.trace(F("pinInterrupt(): end\n"));
+    Log.trace(F("pinInterrupt(): end\n"));
 }
 
-void sleepNow(volatile bool &interrupted) {
-  Log.trace(F("sleepNow(): start\n"));
+void sleepNow(volatile bool & interrupted) {
+    Log.trace(F("sleepNow(): start\n"));
 
-  set_sleep_mode(SLEEP_MODE_PWR_DOWN);
-  sleep_enable();
+    set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+    sleep_enable();
 
-  interrupted = false;
-  attachInterrupt(digitalPinToInterrupt(PIN_INTERRUPT), pinInterrupt, LOW);
+    interrupted = false;
+    attachInterrupt(digitalPinToInterrupt(PIN_INTERRUPT), pinInterrupt, LOW);
 
-  Log.trace(F("powering down\n"));
+    Log.trace(F("powering down\n"));
 
-  // Put the device to sleep:
-  digitalWrite(PIN_MOSFET_GATE, LOW);  // Turn LEDs off to indicate sleep.
-  // Turn MPU off.
-  // XXX digitalWrite(PIN_MPU_POWER, LOW);
-  delay(100);  // XXX needed?
+    // Put the device to sleep:
+    digitalWrite(PIN_MOSFET_GATE, LOW);  // Turn LEDs off to indicate sleep.
+    // Turn MPU off.
+    // XXX digitalWrite(PIN_MPU_POWER, LOW);
+    delay(100);  // XXX needed?
 
-  Log.trace(F("sleeping\n"));
+    Log.trace(F("sleeping\n"));
 
-  Serial.flush();
-  sleep_mode();
+    Serial.flush();
+    sleep_mode();
 
-  // Upon waking up, sketch continues from this point.
-  Log.trace(F("woke\n"));
-  interrupted = true;
-  sleep_disable();
+    // Upon waking up, sketch continues from this point.
+    Log.trace(F("woke\n"));
+    interrupted = true;
+    sleep_disable();
 
-  // Turn LEDs on to indicate awake.
-  digitalWrite(PIN_MOSFET_GATE, HIGH);
+    // Turn LEDs on to indicate awake.
+    digitalWrite(PIN_MOSFET_GATE, HIGH);
 
-  // Turn MPU on.
-  // XXX digitalWrite(PIN_MPU_POWER, HIGH);
+    // Turn MPU on.
+    // XXX digitalWrite(PIN_MPU_POWER, HIGH);
 
-  delay(100);  // XXX needed?
+    delay(100);  // XXX needed?
 
-  Log.trace(F("sleepNow(): end\n"));
+    Log.trace(F("sleepNow(): end\n"));
 }

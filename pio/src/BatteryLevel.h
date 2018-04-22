@@ -1,15 +1,11 @@
 #pragma once
 
-#include "LedStrip.h"
-
 class BatteryLevel {
- public:
-  BatteryLevel(LedStrip* led_strip);
+  public:
+    BatteryLevel(void);
 
-  void Show(void);
+    int GetMillivoltsForDisplay(void) const;
 
- private:
-  LedStrip* led_strip_;
-
-  long ReadVcc(void);
+  private:
+    long ReadVcc(void) const;
 };
