@@ -10,44 +10,54 @@
 
 #define BUTTON_1_ON (!digitalRead(PIN_BUTTON_1))
 
-// LEDs
-//
-// How many leds in your strip?
+// Number of LEDs in the strip.
 #define NUM_LEDS 72
-// Set LEDS brightness
+
+// Number of LEDs to turn on every second when playing.
+#define NUM_LEDS_PER_SECOND 2
+
+// LED animation speed.
+#define FRAMES_PER_SECOND 120
+
+// LED high brightness level.
 #define HIGH_BRIGHTNESS 50
-// Set LEDS brightness
+
+// LED low brightness level.
 #define LOW_BRIGHTNESS 10
 
-// Power Management
-//
-// how many milliseconds at idle before moving to Fake_sleep?
-#define IDLE_MS 20000
-// how many milliseconds at Fake_sleep before moving to Sleep?
-#define FAKE_SLEEP_MS 60000
-// how many milliseconds at Fake_sleep before moving to Sleep?
-#define MAX_SPIRIT_LEVEL_MS 20000
-// how many seconds vertical before moving to Sleep? (in case Stecchino is forgotten vertical)
-#define MAX_PLAY_SECONDS 60
-// how many LEDs are turned on every second when playing?
-#define NUM_LEDS_PER_SECONDS 2
+// Minimum Vcc value when reporting battery level.
+#define MIN_VCC_MV 2700
 
-// LED Animation
-//
-#define FRAMES_PER_SECOND 120
-// duration of animation when system returns from sleep
-#define WAKE_UP_TRANSITION_MS 1000
-// duration of animation when game starts
-#define START_PLAY_TRANSITION_MS 500
-// duration of game over animation
-#define GAME_OVER_TRANSITION_MS 1000
-// duration of animation to sleep
-#define SLEEP_TRANSITION_MS 2000
-
-// lower vcc value when checking battery level
-#define LOW_VCC 2700
-// higher vcc value when checking battery level
-#define HIGH_VCC 3350
+// Maximum Vcc value when reporting battery level.
+#define MAX_VCC_MV 3350
 
 // 0, 1 or 2 to set the angle of the joystick
 #define ACCELEROMETER_ORIENTATION 2
+
+// How long to show the battery level.
+#define MAX_SHOW_BATTERY_MS 5000
+
+// How long to be Idle.
+#define MAX_IDLE_MS 20000
+
+// How long to be FakeSleep before moving to Sleep.
+#define MAX_FAKE_SLEEP_MS 10000 // orig: 60000
+
+// How long to be SpiritLevel before moving to Sleep.
+#define MAX_SPIRIT_LEVEL_MS 20000
+
+// How long to be vertical before moving to Sleep? (in case Stecchino is forgotten vertical)
+#define MAX_PLAY_MS 60000
+
+// duration of animation when system returns from sleep
+#define MAX_WAKE_UP_TRANSITION_MS 1000
+
+// duration of animation when game starts
+#define MAX_START_PLAY_TRANSITION_MS 500
+
+// duration of game over animation
+#define MAX_GAME_OVER_TRANSITION_MS 1000
+
+// duration of animation to sleep
+#define MAX_SLEEP_TRANSITION_MS 2000
+

@@ -3,6 +3,7 @@
 namespace Stecchino {
 
 enum class State {
+    kUnknown,
     kCheckBattery,
     kFakeSleep,
     kGameOverTransition,

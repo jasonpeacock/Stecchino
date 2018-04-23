@@ -12,14 +12,14 @@ int BatteryLevel::GetMillivoltsForDisplay(void) const {
 
     int vcc = static_cast<int>(this->ReadVcc());
 
-    Log.notice(F("VCC     : %dmV\n"), vcc);
-    Log.notice(F("LOW_VCC : %dmV\n"), LOW_VCC);
-    Log.notice(F("HIGH_VCC: %dmV\n"), HIGH_VCC);
+    Log.notice(F("VCC    : %dmV\n"), vcc);
+    Log.notice(F("MIN_VCC: %dmV\n"), MIN_VCC_MV);
+    Log.notice(F("MAX_VCC: %dmV\n"), MAX_VCC_MV);
 
-    if (vcc < LOW_VCC) {
-        vcc = LOW_VCC;
-    } else if (vcc > HIGH_VCC) {
-        vcc = HIGH_VCC;
+    if (vcc < MIN_VCC_MV) {
+        vcc = MIN_VCC_MV;
+    } else if (vcc > MAX_VCC_MV) {
+        vcc = MAX_VCC_MV;
     }
 
     Log.trace(F("BatteryLevel::MillivoltsForDisplay(): end\n"));
@@ -30,8 +30,8 @@ int BatteryLevel::GetMillivoltsForDisplay(void) const {
 long BatteryLevel::ReadVcc(void) const {
     Log.trace(F("BatteryLevel::ReadVcc(): start\n"));
 
-    // Read 1.1V reference against AVcc
-    // set the reference to Vcc and the measurement to the internal 1.1V reference
+    // Read 1.1V reference against AVcc. Set the reference to Vcc
+    // and the measurement to the internal 1.1V reference.
 #if defined(__AVR_ATmega32U4__) || defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
     ADMUX = _BV(REFS0) | _BV(MUX4) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
 #elif defined(__AVR_ATtiny24__) || defined(__AVR_ATtiny44__) || defined(__AVR_ATtiny84__)
@@ -42,21 +42,29 @@ long BatteryLevel::ReadVcc(void) const {
     ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
 #endif
 
-    delay(2);  // Wait for Vref to settle
+    // Wait for Vref to settle.
+    delay(2);
 
-    ADCSRA |= _BV(ADSC);  // Start conversion
+    // Start conversion.
+    ADCSRA |= _BV(ADSC);
+
     while (bit_is_set(ADCSRA, ADSC)) {
-        // measuring
+        // Measuring.
     }
 
-    uint8_t low  = ADCL;  // must read ADCL first - it then locks ADCH
-    uint8_t high = ADCH;  // unlocks both
+    // Must read ADCL first - it then locks ADCH.
+    uint8_t low  = ADCL;
+
+    // Reading ADCH then unlocks both.
+    uint8_t high = ADCH;
 
     long result = (high << 8) | low;
 
-    result = 1125300L / result;  // Calculate Vcc (in mV); 1125300 = 1.1*1023*1000
+    // Calculate Vcc (in mV); 1125300 = 1.1 * 1023 * 1000
+    result = 1125300L / result;
 
     Log.trace(F("BatteryLevel::ReadVcc(): end\n"));
 
-    return result;  // Vcc in millivolts
+    // Vcc in millivolts.
+    return result;
 }

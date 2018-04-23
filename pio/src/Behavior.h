@@ -5,9 +5,9 @@
 #include "Mpu.h"
 #include "Stecchino.h"
 
-class Condition {
+class Behavior {
   public:
-    Condition(LedStrip * led_strip, Mpu * mpu, BatteryLevel * battery_level);
+    Behavior(LedStrip * led_strip, Mpu * mpu, BatteryLevel * battery_level);
 
     void Setup(void);
 
@@ -18,6 +18,7 @@ class Condition {
     Stecchino::State GetState() const { return state_; };
 
   private:
+    Stecchino::State previous_state_;
     Stecchino::State state_;
 
     LedStrip *     led_strip_;
@@ -33,6 +34,8 @@ class Condition {
     bool          ready_for_change_     = false;
 
     void SetState(const Stecchino::State state);
+
+    bool IsNewState(void) const;
 
     void CheckBattery(void);
 

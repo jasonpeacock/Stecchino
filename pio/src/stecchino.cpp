@@ -9,15 +9,15 @@
 #include <ArduinoLog.h>
 
 // Local
-#include "Condition.h"
+#include "Behavior.h"
 #include "Configuration.h"
 #include "LedStrip.h"
 #include "Mpu.h"
 #include "Position.h"
 #include "Stecchino.h"
 
+Behavior *     behavior;
 BatteryLevel * battery_level;
-Condition *    condition;
 LedStrip *     led_strip;
 Mpu *          mpu;
 Position *     position;
@@ -49,8 +49,8 @@ void setup() {
     position = new Position(mpu);
     position->Setup();
 
-    condition = new Condition(led_strip, mpu, battery_level);
-    condition->Setup();
+    behavior = new Behavior(led_strip, mpu, battery_level);
+    behavior->Setup();
 
     Log.trace(F("setup(): end\n"));
 }
@@ -67,7 +67,7 @@ void loop() {
     Stecchino::AccelStatus accel_status     = position->GetAccelStatus();
     Stecchino::Orientation orientation      = position->GetOrientation();
 
-    condition->Update(angle_to_horizon, accel_status, orientation);
+    behavior->Update(angle_to_horizon, accel_status, orientation);
 
     led_strip->Update();
 

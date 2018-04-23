@@ -12,12 +12,7 @@ class LedStrip {
   public:
     enum class Pattern {
         kGameOver,
-        kGoingToSleep,
-        kIdle,
-        kOff,
         kSpiritLevel,
-        kStartPlay,
-        kWahoo,
     };
 
     LedStrip();
@@ -34,12 +29,20 @@ class LedStrip {
 
     void ShowSpiritLevel(const float angle);
 
+    void ShowIdle();
+
+    void ShowStartPlay();
+
+    void ShowWinner();
+
+    void ShowGoingToSleep();
+
     void ShowPattern(const LedStrip::Pattern pattern);
 
     void NextPattern(void);
 
   private:
-    // Index number of which pattern is current.
+    // Index number of the current pattern.
     uint8_t current_pattern_;
 
     // Increment by 1 for each Frame of Transition, New/Changed connection(s) pattern.
@@ -50,9 +53,6 @@ class LedStrip {
     const uint8_t led_count_;
 
     CRGB leds_[NUM_LEDS];
-
-    // Winner!
-    void RedGlitterPattern(void);
 
     // Entertainment
     void ConfettiPattern(void);
