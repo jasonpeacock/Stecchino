@@ -21,11 +21,13 @@ class Behavior {
     Stecchino::State previous_state_;
     Stecchino::State state_;
 
+    volatile static bool interrupted_;
+
     LedStrip *     led_strip_;
     Mpu *          mpu_;
     BatteryLevel * battery_level_;
 
-    // When the current state was entered, so we can tell when it's time to
+    // Track when the current state was entered so we can tell when it's time to
     // expire the state and transition to a new state.
     unsigned long start_time_ = 0;
 
@@ -36,6 +38,10 @@ class Behavior {
     void SetState(const Stecchino::State state);
 
     bool IsNewState(void) const;
+
+    static void PinInterrupt(void);
+
+    void Sleep(void);
 
     void CheckBattery(void);
 

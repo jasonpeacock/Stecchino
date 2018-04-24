@@ -53,7 +53,7 @@ long BatteryLevel::ReadVcc(void) const {
     }
 
     // Must read ADCL first - it then locks ADCH.
-    uint8_t low  = ADCL;
+    uint8_t low = ADCL;
 
     // Reading ADCH then unlocks both.
     uint8_t high = ADCH;

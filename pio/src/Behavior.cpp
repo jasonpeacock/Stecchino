@@ -2,13 +2,15 @@
 
 #include <Arduino.h>
 #include <ArduinoLog.h>
+#include <avr/sleep.h>
 
 #include "BatteryLevel.h"
 #include "Configuration.h"
 #include "LedStrip.h"
 #include "Mpu.h"
-#include "SleepNow.h"
 #include "Stecchino.h"
+
+volatile bool Behavior::interrupted_ = false;
 
 Behavior::Behavior(LedStrip * led_strip, Mpu * mpu, BatteryLevel * battery_level)
     : state_(Stecchino::State::kUnknown), led_strip_(led_strip), mpu_(mpu), battery_level_(battery_level) {}
@@ -60,14 +62,13 @@ void Behavior::Update(const float                  angle_to_horizon,
             Log.error(F("Unknown state [%d], defaulting to CheckBattery\n"), static_cast<int>(state_));
             SetState(Stecchino::State::kCheckBattery);
         } break;
-
     }
 }
 
 void Behavior::SetState(const Stecchino::State state) {
     previous_state_ = state_;
-    state_      = state;
-    start_time_ = millis();
+    state_          = state;
+    start_time_     = millis();
 
     led_strip_->Off();
 }
@@ -76,6 +77,51 @@ bool Behavior::IsNewState(void) const {
     return (state_ == previous_state_);
 }
 
+void Behavior::PinInterrupt(void) {
+    Log.trace(F("PinInterrupt()\n"));
+
+    if (Behavior::interrupted_) {
+        Log.notice(F("Interrupted, disabling interrupt\n"));
+        detachInterrupt(digitalPinToInterrupt(PIN_INTERRUPT));
+    }
+}
+
+void Behavior::Sleep(void) {
+    Log.trace(F("Behavior::Sleep()\n"));
+
+    set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+    sleep_enable();
+
+    Behavior::interrupted_ = false;
+    attachInterrupt(digitalPinToInterrupt(PIN_INTERRUPT), PinInterrupt, LOW);
+
+    Log.trace(F("powering down\n"));
+
+    // Put the device to sleep:
+    digitalWrite(PIN_MOSFET_GATE, LOW);  // Turn LEDs off to indicate sleep.
+
+    // Turn MPU off.
+    // XXX digitalWrite(PIN_MPU_POWER, LOW);
+    delay(100);  // XXX needed?
+
+    Log.trace(F("sleeping\n"));
+
+    Serial.flush();
+    sleep_mode();
+
+    // Upon waking up, sketch continues from this point.
+    Log.trace(F("woke\n"));
+    Behavior::interrupted_ = true;
+    sleep_disable();
+
+    // Turn LEDs on to indicate awake.
+    digitalWrite(PIN_MOSFET_GATE, HIGH);
+
+    // Turn MPU on.
+    // XXX digitalWrite(PIN_MPU_POWER, HIGH);
+
+    delay(100);  // XXX needed?
+}
 void Behavior::CheckBattery(void) {
     Log.trace(F("Behavior::CheckBattery\n"));
 
@@ -109,18 +155,6 @@ void Behavior::Idle(const Stecchino::AccelStatus accel_status, const Stecchino::
     if (orientation == Stecchino::Orientation::kPosition_2) {
         SetState(Stecchino::State::kSleepTransition);
         return;
-    }
-
-    if (BUTTON_1_ON && ready_for_change_) {
-        // delay(20); // debouncing
-        ready_for_change_ = false;
-
-        led_strip_->NextPattern();
-
-        // Restart counter to enjoy the new pattern longer.
-        start_time_ = millis();
-    } else if (!BUTTON_1_ON) {
-        ready_for_change_ = true;
     }
 
     led_strip_->ShowIdle();
@@ -158,8 +192,7 @@ void Behavior::Play(const Stecchino::AccelStatus accel_status) {
         record_time_ = elapsed_time;
     }
 
-    if (elapsed_time > previous_record_time_ &&
-        elapsed_time <= previous_record_time_ + 1000 &&
+    if (elapsed_time > previous_record_time_ && elapsed_time <= previous_record_time_ + 1000 &&
         previous_record_time_ > 0) {
         led_strip_->ShowWinner();
     }
@@ -212,12 +245,6 @@ void Behavior::FakeSleep(const float angle_to_horizon) {
         return;
     }
 
-    if (BUTTON_1_ON) {
-        ready_for_change_ = false;
-        SetState(Stecchino::State::kIdle);
-        return;
-    }
-
     led_strip_->Off();
 }
 
@@ -230,13 +257,13 @@ void Behavior::SleepTransition(void) {
     }
 
     // Go to sleep. This will continue when interrupted.
-    sleepNow(interrupted);
+    Sleep();
 
     // position_->ClearSampleBuffer();
 
     // Restore MPU connection.
-    Log.notice(F("Restarting MPU\n"));
-    mpu_->Setup();
+    // XXX Log.notice(F("Restarting MPU\n"));
+    // XXX mpu_->Setup();
 
     SetState(Stecchino::State::kCheckBattery);
 }

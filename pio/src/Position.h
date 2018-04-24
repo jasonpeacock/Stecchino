@@ -17,11 +17,11 @@ class Position {
 
     void ClearSampleBuffer(void);
 
-    Stecchino::AccelStatus GetAccelStatus(void);
+    Stecchino::AccelStatus GetAccelStatus(void) const { return accel_status_; }
 
-    Stecchino::Orientation GetOrientation(void);
+    Stecchino::Orientation GetOrientation(void) const { return orientation_; }
 
-    float GetAngleToHorizon(void);
+    float GetAngleToHorizon(void) const { return angle_to_horizon_; }
 
   private:
     // Offset accel readings
@@ -47,7 +47,7 @@ class Position {
     RunningMedian vertical_rolling_sample_ = RunningMedian(kRunningMedianBufferSize);
 
     Stecchino::AccelStatus accel_status_ = Stecchino::AccelStatus::kUnknown;
-    Stecchino::Orientation orientation_  = Stecchino::Orientation::kNone;
+    Stecchino::Orientation orientation_  = Stecchino::Orientation::kUnknown;
 
     Mpu * mpu_;
 };

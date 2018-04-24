@@ -39,12 +39,7 @@ class LedStrip {
 
     void ShowPattern(const LedStrip::Pattern pattern);
 
-    void NextPattern(void);
-
   private:
-    // Index number of the current pattern.
-    uint8_t current_pattern_;
-
     // Increment by 1 for each Frame of Transition, New/Changed connection(s) pattern.
     uint8_t frame_count_;
 
@@ -54,29 +49,7 @@ class LedStrip {
 
     CRGB leds_[NUM_LEDS];
 
-    // Entertainment
     void ConfettiPattern(void);
 
-    // Entertainment
     void CylonPattern(void);
-
-    // Entertainment
-    void JugglePattern(void);
-
-    // Entertainment
-    void BpmPattern(void);
-
-    // Entertainment
-    void RainbowPattern(void);
-
-    // Entertainment patterns that can be cycled through via button-press.
-    typedef void (LedStrip::*PatternList[5])();
-
-    PatternList patterns_ = {
-        &LedStrip::ConfettiPattern,
-        &LedStrip::CylonPattern,
-        &LedStrip::JugglePattern,
-        &LedStrip::BpmPattern,
-        &LedStrip::RainbowPattern,
-    };
 };

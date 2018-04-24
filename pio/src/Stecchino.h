@@ -2,8 +2,8 @@
 
 namespace Stecchino {
 
-enum class State {
-    kUnknown,
+enum class State : int {
+    kUnknown = 0,
     kCheckBattery,
     kFakeSleep,
     kGameOverTransition,
@@ -14,15 +14,15 @@ enum class State {
     kStartPlayTransition,
 };
 
-enum class AccelStatus {
+enum class AccelStatus : int {
+    kUnknown = 0,
     kFallen,
     kStraight,
-    kUnknown,
 };
 
 // Used to detect position of buttons relative to Stecchino and user
-enum class Orientation {
-    kNone,
+enum class Orientation : int {
+    kUnknown = 0,
     kPosition_1,
     kPosition_2,
     kPosition_3,

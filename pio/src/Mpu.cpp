@@ -3,11 +3,20 @@
 #include <ArduinoLog.h>
 #include <MPU6050.h>
 
+#include "Configuration.h"
+
 Mpu::Mpu(void){};
 
 // Setup MPU.
-void Mpu::Setup(void) {
-    Log.trace(F("Mpu::Setup(): start\n"));
+bool Mpu::Setup(void) {
+    Log.trace(F("Mpu::Setup\n"));
+
+    pinMode(PIN_MPU_POWER, OUTPUT);
+    digitalWrite(PIN_MPU_POWER, HIGH);
+
+    // Wait for the MPU to turn on.
+    // XXX can this be shorter?
+    delay(500);
 
     Wire.begin();
 
@@ -15,7 +24,7 @@ void Mpu::Setup(void) {
 
     if (!mpu_.testConnection()) {
         Log.error(F("MPU6050 connection failed\n"));
-        return;
+        return false;
     }
 
     Log.notice(F("MPU6050 connection successful\n"));
@@ -25,9 +34,9 @@ void Mpu::Setup(void) {
     mpu_.setInterruptMode(true);
 
     mpu_.setIntMotionEnabled(true);
-    mpu_.setMotionDetectionThreshold(2);
 
     // Only trigger if significant movement duration.
+    mpu_.setMotionDetectionThreshold(2);
     mpu_.setMotionDetectionDuration(UINT8_MAX);
 
     // Enabling the high-pass filter makes the MPU sensitive to movement,
@@ -50,11 +59,11 @@ void Mpu::Setup(void) {
     Log.verbose(F("DLPF Mode: [%d]\n"), mpu_.getDLPFMode());
     Log.verbose(F("DHPF Mode: [%d]\n"), mpu_.getDHPFMode());
 
-    Log.trace(F("Mpu::Setup(): end\n"));
+    return true;
 }
 
 void Mpu::GetAccelMotion(int16_t * x_a, int16_t * y_a, int16_t * z_a) {
-    Log.trace(F("Mpu::GetMotion(): start\n"));
+    Log.trace(F("Mpu::GetMotion\n"));
 
     // Not used, but needed for the `getMotion6()` API.
     int16_t x_g = 0;
@@ -62,6 +71,4 @@ void Mpu::GetAccelMotion(int16_t * x_a, int16_t * y_a, int16_t * z_a) {
     int16_t z_g = 0;
 
     mpu_.getMotion6(x_a, y_a, z_a, &x_g, &y_g, &z_g);
-
-    Log.trace(F("Mpu::GetMotion(): end\n"));
 }

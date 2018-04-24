@@ -32,11 +32,7 @@ void setup() {
     Log.begin(LOG_LEVEL_VERBOSE, &Serial, true);
     Log.trace(F("setup(): start\n"));
 
-    pinMode(PIN_BUTTON_1, INPUT_PULLUP);
     pinMode(PIN_INTERRUPT, INPUT_PULLUP);
-
-    pinMode(PIN_MPU_POWER, OUTPUT);
-    digitalWrite(PIN_MPU_POWER, HIGH);
 
     led_strip = new LedStrip();
     led_strip->Setup();
@@ -44,7 +40,12 @@ void setup() {
     battery_level = new BatteryLevel();
 
     mpu = new Mpu();
-    mpu->Setup();
+    if (!mpu->Setup()) {
+        Log.fatal(F("Failed to setup the MPU\n"));
+        Serial.flush();
+        // TODO display error code pattern for MPU.
+        exit(1);
+    }
 
     position = new Position(mpu);
     position->Setup();

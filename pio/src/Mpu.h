@@ -6,7 +6,7 @@ class Mpu {
   public:
     Mpu(void);
 
-    void Setup(void);
+    bool Setup(void);
 
     void GetAccelMotion(int16_t * x_a, int16_t * y_a, int16_t * z_a);
 

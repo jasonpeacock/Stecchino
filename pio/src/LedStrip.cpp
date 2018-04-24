@@ -6,7 +6,7 @@
 
 #include "Configuration.h"
 
-LedStrip::LedStrip() : current_pattern_(0), frame_count_(0), hue_(0), led_count_(NUM_LEDS) {}
+LedStrip::LedStrip() : frame_count_(0), hue_(0), led_count_(NUM_LEDS) {}
 
 // Setup LED strip.
 void LedStrip::Setup(void) {
@@ -32,7 +32,7 @@ void LedStrip::Off(void) {
     for (int i = 0; i < led_count_; ++i) {
         leds_[i] = CRGB::Black;
 
-        //leds_[i].nscale8(230);
+        // leds_[i].nscale8(230);
         delay(10);
         FastLED.show();
     }
@@ -68,40 +68,6 @@ void LedStrip::CylonPattern() {
 
     int pos = beatsin16(13, 0, led_count_);
     leds_[pos] += CHSV(hue_, 255, 192);
-}
-
-// Eight colored dots, weaving in and out of sync with each other.
-void LedStrip::JugglePattern() {
-    fadeToBlackBy(leds_, led_count_, 20);
-
-    byte dot_hue = 0;
-    for (int i = 0; i < 8; i++) {
-        int pos = beatsin16(i + 7, 0, led_count_);
-        leds_[pos] |= CHSV(dot_hue, 200, 255);
-
-        dot_hue += 32;
-    }
-}
-
-// Colored stripes pulsing at a defined Beats-Per-Minute (BPM).
-void LedStrip::BpmPattern() {
-    uint8_t       beats_per_minute = 62;
-    CRGBPalette16 palette          = PartyColors_p;
-    uint8_t       beat             = beatsin8(beats_per_minute, 64, 255);
-
-    for (int i = 0; i < led_count_; ++i) {
-        leds_[i] = ColorFromPalette(palette, hue_ + (i * 2), beat - hue_ + (i * 10));
-    }
-}
-
-// FastLED's built-in rainbow generator
-void LedStrip::RainbowPattern() {
-    fill_rainbow(leds_, led_count_, hue_, 7);
-}
-
-void LedStrip::NextPattern() {
-    // add one to the current pattern number, and wrap around at the end
-    current_pattern_ = (current_pattern_ + 1) % ARRAY_SIZE(patterns_);
 }
 
 void LedStrip::ShowBatteryLevel(const int millivolts) {
@@ -146,7 +112,7 @@ void LedStrip::ShowSpiritLevel(const float angle) {
 void LedStrip::ShowIdle() {
     Log.trace(F("LedStrip::ShowIdle\n"));
 
-    (this->*patterns_[current_pattern_])();
+    ConfettiPattern();
 }
 
 void LedStrip::ShowStartPlay() {
