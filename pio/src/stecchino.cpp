@@ -9,12 +9,12 @@
 #include <ArduinoLog.h>
 
 // Local
-#include "Behavior.h"
-#include "Configuration.h"
-#include "LedStrip.h"
-#include "Mpu.h"
-#include "Position.h"
-#include "Stecchino.h"
+#include "behavior.h"
+#include "configuration.h"
+#include "ledStrip.h"
+#include "mpu.h"
+#include "position.h"
+#include "stecchino.h"
 
 Behavior *     behavior;
 BatteryLevel * battery_level;

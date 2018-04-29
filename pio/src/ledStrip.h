@@ -4,7 +4,7 @@
 
 #include <FastLED.h>
 
-#include "Configuration.h"
+#include "configuration.h"
 
 #define ARRAY_SIZE(A) (sizeof(A) / sizeof((A)[0]))
 

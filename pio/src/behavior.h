@@ -1,9 +1,9 @@
 #pragma once
 
-#include "BatteryLevel.h"
-#include "LedStrip.h"
-#include "Mpu.h"
-#include "Stecchino.h"
+#include "batteryLevel.h"
+#include "ledStrip.h"
+#include "mpu.h"
+#include "stecchino.h"
 
 class Behavior {
   public:

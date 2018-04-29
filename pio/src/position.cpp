@@ -1,11 +1,11 @@
-#include "Position.h"
+#include "position.h"
 
 #include <Arduino.h>
+#include <ArduinoLog.h>
 #include <RunningMedian.h>
 
-#include "ArduinoLog.h"
-#include "Mpu.h"
-#include "Stecchino.h"
+#include "mpu.h"
+#include "stecchino.h"
 
 Position::Position(Mpu * mpu) : mpu_(mpu) {}
 

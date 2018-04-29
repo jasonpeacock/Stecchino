@@ -1,10 +1,10 @@
-#include "LedStrip.h"
+#include "ledStrip.h"
 
 #include <Arduino.h>
 #include <ArduinoLog.h>
 #include <FastLED.h>
 
-#include "Configuration.h"
+#include "configuration.h"
 
 LedStrip::LedStrip() : frame_count_(0), hue_(0), led_count_(NUM_LEDS) {}
 

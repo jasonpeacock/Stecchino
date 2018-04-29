@@ -1,14 +1,14 @@
-#include "Behavior.h"
+#include "behavior.h"
 
 #include <Arduino.h>
 #include <ArduinoLog.h>
 #include <avr/sleep.h>
 
-#include "BatteryLevel.h"
-#include "Configuration.h"
-#include "LedStrip.h"
-#include "Mpu.h"
-#include "Stecchino.h"
+#include "batteryLevel.h"
+#include "configuration.h"
+#include "ledStrip.h"
+#include "mpu.h"
+#include "stecchino.h"
 
 volatile bool Behavior::interrupted_ = false;
 

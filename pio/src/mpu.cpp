@@ -1,9 +1,9 @@
-#include "Mpu.h"
+#include "mpu.h"
 
 #include <ArduinoLog.h>
 #include <MPU6050.h>
 
-#include "Configuration.h"
+#include "configuration.h"
 
 Mpu::Mpu(void){};
 

@@ -1,9 +1,9 @@
-#include "BatteryLevel.h"
+#include "batteryLevel.h"
 
 #include <Arduino.h>
 
 #include "ArduinoLog.h"
-#include "Configuration.h"
+#include "configuration.h"
 
 BatteryLevel::BatteryLevel(void){};
 

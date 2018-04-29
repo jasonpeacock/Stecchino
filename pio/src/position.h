@@ -3,9 +3,9 @@
 #include <Arduino.h>
 #include <RunningMedian.h>
 
-#include "Configuration.h"
-#include "Mpu.h"
-#include "Stecchino.h"
+#include "configuration.h"
+#include "mpu.h"
+#include "stecchino.h"
 
 class Position {
   public:
